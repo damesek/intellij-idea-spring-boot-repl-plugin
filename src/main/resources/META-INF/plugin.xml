@@ -1,0 +1,78 @@
+<idea-plugin>
+    <id>hu.baader.java-over-nrepl</id>
+    <name>Java over nREPL</name>
+    <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
+    
+    <description><![CDATA[
+      Execute Java code through nREPL in IntelliJ IDEA.
+      <br/><br/>
+      Features:
+      <ul>
+        <li>Connect to nREPL server with Java middleware</li>
+        <li>Execute Java code snippets</li>
+        <li>Persistent settings (host, port, auto-connect)</li>
+        <li>Tool window with REPL interface</li>
+        <li>Run selection from editor</li>
+      </ul>
+    ]]></description>
+    
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+    
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window -->
+        <toolWindow id="Java REPL"
+                    factoryClass="hu.baader.repl.ui.JavaReplToolWindowFactory"
+                    anchor="bottom"/>
+
+        <!-- Settings -->
+        <applicationConfigurable
+                instance="hu.baader.repl.settings.PluginSettingsConfigurable"
+                id="hu.baader.repl.settings"
+                displayName="Java over nREPL"/>
+
+        <!-- Project startup -->
+        <postStartupActivity implementation="hu.baader.repl.nrepl.ProjectStartup"/>
+
+        <!-- Notification Group -->
+        <notificationGroup id="Java REPL"
+                          displayType="BALLOON"/>
+
+        <!-- Project Service for Run Configurations persistence -->
+        <projectService serviceImplementation="hu.baader.repl.ui.RunConfigService"/>
+    </extensions>
+    
+    <actions>
+        <!-- Run Selection Action -->
+        <action id="hu.baader.repl.RunEditorSelection"
+                class="hu.baader.repl.actions.RunEditorSelectionAction"
+                text="Run Selection in Java REPL"
+                description="Send current editor's selection (or file) to Java-over-nREPL">
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+            <keyboard-shortcut first-keystroke="ctrl shift R" keymap="$default"/>
+        </action>
+
+        <!-- Editor Popup Menu -->
+        <action id="hu.baader.repl.RunEditorSelectionPopup"
+                class="hu.baader.repl.actions.RunEditorSelectionAction"
+                text="Run Selection in Java REPL">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
+        <!-- Attach & Inject Dev Runtime -->
+        <action id="hu.baader.repl.AttachDevRuntime"
+                class="hu.baader.repl.actions.AttachDevRuntimeAction"
+                text="Attach &amp; Inject Dev Runtime"
+                description="Attach to a running JVM and load the dev runtime agent">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!-- Bind Spring Context -->
+        <action id="hu.baader.repl.BindSpringContext"
+                class="hu.baader.repl.actions.BindSpringContextAction"
+                text="Bind Spring Context"
+                description="Bind Spring ApplicationContext into dev runtime for REPL usage">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
