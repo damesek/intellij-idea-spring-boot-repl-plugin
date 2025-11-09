@@ -1,5 +1,10 @@
 # Java over nREPL — IntelliJ IDEA Plugin
 
+<!-- Badges -->
+[![Maven Central – sb-repl-bridge](https://img.shields.io/maven-central/v/hu.baader/sb-repl-bridge.svg?label=sb-repl-bridge&logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge)
+[![Maven Central – sb-repl-agent](https://img.shields.io/maven-central/v/hu.baader/sb-repl-agent.svg?label=sb-repl-agent&logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent)
+
+
 ![IntelliJ Java REPL](docs/images/intellij-idea-plugin-java-repl.png)
 
 All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA while talking to a live Spring Boot application. The repository contains the IDE plugin, the attachable dev-runtime agent, and helper modules that make the Spring context instantly available in the REPL.

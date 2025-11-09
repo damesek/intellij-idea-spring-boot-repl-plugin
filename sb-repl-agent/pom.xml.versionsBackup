@@ -5,18 +5,16 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>hu.baader</groupId>
-    <artifactId>sb-repl-bridge</artifactId>
-    <version>0.5.0</version>
-    <name>Spring Boot Java REPL Bridge</name>
-    <description>Auto-configuration that bridges a running Spring context to the sb-repl agent.</description>
+    <artifactId>sb-repl-agent</artifactId>
+    <version>0.5.0-SNAPSHOT</version>
+    <name>sb-repl Agent</name>
+    <description>Attachable JVM agent that exposes an nREPL endpoint for the sb-repl IntelliJ plugin.</description>
     <url>https://github.com/damesek/sb-repl</url>
 
     <properties>
         <java.version>17</java.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring.boot.version>3.2.5</spring.boot.version>
     </properties>
 
     <licenses>
@@ -42,29 +40,28 @@
         <url>https://github.com/damesek/sb-repl</url>
     </scm>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-            <version>${spring.boot.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <version>${spring.boot.version}</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>2.0.12</version>
-            <scope>provided</scope>
-        </dependency>
-    </dependencies>
-
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>add-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>../dev-runtime/src/main/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -73,6 +70,23 @@
                     <release>${java.version}</release>
                 </configuration>
             </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Premain-Class>com.baader.devrt.Agent</Premain-Class>
+                            <Agent-Class>com.baader.devrt.Agent</Agent-Class>
+                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                            <Can-Retransform-Classes>false</Can-Retransform-Classes>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -86,6 +100,7 @@
                     </execution>
                 </executions>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -99,6 +114,7 @@
                     </execution>
                 </executions>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-gpg-plugin</artifactId>
@@ -113,6 +129,7 @@
                     </execution>
                 </executions>
             </plugin>
+
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
