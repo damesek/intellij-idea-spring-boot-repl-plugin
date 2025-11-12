@@ -227,6 +227,7 @@ return $varName;
     private fun saveAllBeans() {
         connection()?.let { nrepl ->
             val expr = """
+                org.springframework.context.ApplicationContext applicationContext = (org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext();
                 var beans = applicationContext.getBeanDefinitionNames();
                 var result = new java.util.HashMap();
                 for (String name : beans) {
@@ -266,6 +267,7 @@ return $varName;
     private fun saveBeansByType(type: String) {
         connection()?.let { nrepl ->
             val expr = """
+                org.springframework.context.ApplicationContext applicationContext = (org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext();
                 var beans = applicationContext.getBeanDefinitionNames();
                 var result = new java.util.HashMap();
                 for (String name : beans) {
@@ -313,7 +315,10 @@ return $varName;
 
         if (!beanName.isNullOrBlank()) {
             connection()?.let { nrepl ->
-                val expr = "return applicationContext.getBean(\"$beanName\");"
+                val expr = """
+                    org.springframework.context.ApplicationContext applicationContext = (org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext();
+                    return applicationContext.getBean(\"$beanName\");
+                """.trimIndent()
 
                 nrepl.snapshotSave(beanName, expr,
                     onResult = { result ->

@@ -58,24 +58,8 @@ class NreplClient(private val host: String, private val port: Int) : AutoCloseab
         }
     }
     
-    fun evalJava(code: String) {
-        val payload = mapOf(
-            "op" to "java-eval",
-            "code" to code,
-            "id" to uuid(),
-            "session" to (session ?: "")
-        )
-        send(payload)
-    }
-    
-    fun evalClojure(code: String) {
-        val payload = mapOf(
-            "op" to "eval",
-            "code" to code,
-            "id" to uuid(),
-            "session" to (session ?: "")
-        )
-        send(payload)
+    fun eval(code: String) {
+        sendOp("eval", mapOf("code" to code))
     }
 
     fun sendOp(op: String, extra: Map<String, String> = emptyMap(), cb: ((Map<String,String>)->Unit)? = null) {

@@ -15,6 +15,7 @@ class NreplService(private val project: Project) {
     private val connecting = AtomicBoolean(false)
     private val connected = AtomicBoolean(false)
     private val springBound = AtomicBoolean(false)
+    private val supportsJshell = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val listeners = mutableListOf<(Map<String, String>) -> Unit>()
 
@@ -25,23 +26,32 @@ class NreplService(private val project: Project) {
 
     fun isConnected(): Boolean = connected.get()
     fun isSpringBound(): Boolean = springBound.get()
+    fun isJshellMode(): Boolean = supportsJshell.get()
 
-    fun connectAsync() {
+    fun connectAsync(onComplete: ((isJshell: Boolean) -> Unit)? = null) {
         if (connected.get() || connecting.getAndSet(true)) return
         springBound.set(false)
 
         val c = NreplClient(settings.host, settings.port)
-        c.onMessage { msg -> 
+        c.onMessage { msg ->
             listeners.forEach { it(msg) }
         }
-        
+
         try {
             c.connect()
             client = c
             connected.set(true)
+            // Probe server capabilities and invoke the callback ONLY when done
+            c.sendOp("describe") { m ->
+                val ops = m["ops"] ?: ""
+                val has = ops.contains("imports/get") || ops.contains("session/reset")
+                supportsJshell.set(has)
+                onComplete?.invoke(has)
+            }
         } catch (t: Throwable) {
             client = null
             connected.set(false)
+            onComplete?.invoke(false) // Ensure callback is called even on error
             throw t
         } finally {
             connecting.set(false)
@@ -60,14 +70,49 @@ class NreplService(private val project: Project) {
         connectAsync()
     }
 
-    fun evalJava(code: String) {
-        client?.evalJava(code)
-            ?: throw IllegalStateException("Not connected to nREPL")
+    fun eval(code: String) {
+        val c = client ?: throw IllegalStateException("Not connected to nREPL")
+        c.eval(code)
     }
-    
-    fun evalClojure(code: String) {
-        client?.evalClojure(code)
-            ?: throw IllegalStateException("Not connected to nREPL")
+
+    // Session ops
+    fun resetSession(onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
+        val c = client ?: throw IllegalStateException("Not connected to nREPL")
+        if (!supportsJshell.get()) { onError?.invoke("JShell session nem támogatott az agent-ben") ; return }
+        c.sendOp("session-reset") { m ->
+            when {
+                m["err"] != null -> onError?.invoke(m["err"]!!)
+                m["reset"] != null -> onResult?.invoke("reset")
+                m["value"] != null -> onResult?.invoke(m["value"]!!)
+            }
+        }
+    }
+
+    fun getImports(onResult: (List<String>)->Unit, onError: ((String)->Unit)? = null) {
+        val c = client ?: throw IllegalStateException("Not connected to nREPL")
+        if (!supportsJshell.get()) { onError?.invoke("Imports op nem támogatott az agent-ben") ; return }
+        c.sendOp("imports-get") { m ->
+            when {
+                m["err"] != null -> onError?.invoke(m["err"]!!)
+                m["imports"] != null -> onResult(m["imports"]!!.lines().filter { it.isNotBlank() })
+                m["value"] != null -> onResult(m["value"]!!.lines().filter { it.isNotBlank() })
+                else -> onResult(emptyList())
+            }
+        }
+    }
+
+    fun addImports(imports: List<String>, onResult: (List<String>)->Unit, onError: ((String)->Unit)? = null) {
+        val c = client ?: throw IllegalStateException("Not connected to nREPL")
+        if (!supportsJshell.get()) { onError?.invoke("Imports op nem támogatott az agent-ben") ; return }
+        val payload = imports.joinToString("\n")
+        c.sendOp("imports-add", mapOf("imports" to payload)) { m ->
+            when {
+                m["err"] != null -> onError?.invoke(m["err"]!!)
+                m["imports"] != null -> onResult(m["imports"]!!.lines().filter { it.isNotBlank() })
+                m["value"] != null -> onResult(m["value"]!!.lines().filter { it.isNotBlank() })
+                else -> onResult(emptyList())
+            }
+        }
     }
 
     fun bindSpring(expr: String? = null, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {

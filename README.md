@@ -1,8 +1,8 @@
 # Java over nREPL — IntelliJ IDEA Plugin
 
 <!-- Badges -->
-[![Maven Central – sb-repl-bridge](https://img.shields.io/maven-central/v/hu.baader/sb-repl-bridge.svg?label=sb-repl-bridge&logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge)
-[![Maven Central – sb-repl-agent](https://img.shields.io/maven-central/v/hu.baader/sb-repl-agent.svg?label=sb-repl-agent&logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent)
+[![Maven Central – sb-repl-bridge 0.6.0](https://img.shields.io/badge/sb--repl--bridge-0.6.0-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.6.0)
+[![Maven Central – sb-repl-agent 0.6.0](https://img.shields.io/badge/sb--repl--agent-0.6.0-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.6.0)
 
 
 ![IntelliJ Java REPL](docs/images/intellij-idea-plugin-java-repl.png)
@@ -16,15 +16,36 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
 - **Distributable modules** – `sb-repl-bridge` (Spring auto-config + SnapshotHelper) and `sb-repl-agent` (packaged attachable agent) ready for Maven Central publishing.
 
 ## Quick start
-1. **Add the bridge to your Spring app**
+1. **Add the bridge + agent dependency to your Spring app (v0.6.0)**
    ```xml
+   <repositories>
+     <repository>
+       <id>sonatype-snapshots</id>
+       <url>https://s01.oss.sonatype.org/content/repositories/snapshots/</url>
+       <snapshots>
+         <enabled>true</enabled>
+       </snapshots>
+     </repository>
+   </repositories>
+
    <dependency>
      <groupId>hu.baader</groupId>
      <artifactId>sb-repl-bridge</artifactId>
-     <version>0.5.0-SNAPSHOT</version>
+     <version>0.6.0</version>
+   </dependency>
+   <dependency>
+     <groupId>hu.baader</groupId>
+     <artifactId>sb-repl-agent</artifactId>
+     <version>0.6.0</version>
    </dependency>
    ```
    Start the application (dev profile), so the bridge can push the running `ApplicationContext` into the agent once attached.
+
+   ```java
+   @SpringBootApplication
+   @ComponentScan(basePackages = {"com.intuitech.cvprocessor", "com.baader.sbrepl.bridge"})
+   public class Application { ... }
+   ```
 
 2. **Build and install the IntelliJ plugin**
    ```bash
@@ -33,11 +54,18 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
    ```
    The new Attach action will automatically pull the agent JAR from `~/.m2/repository/hu/baader/sb-repl-agent/...` if you installed it locally.
 
-3. **Use the REPL**
-   - Run your Spring Boot app (with `nrepl.enabled=true`, default port `5557`).
-   - IntelliJ → View → Tool Windows → Java REPL.
-   - Click **Attach & Inject**, then **Bind Spring Context** (or the combined Quick Action).
-   - Select code and hit **Ctrl+Enter** to evaluate it inside the running JVM.
+3. **Use the REPL + HTTP panel**
+   - Indítsd el a Spring Boot appot (a bridge automatikusan publikálja az `ApplicationContext`-et az agent felé).
+   - IntelliJ → View → Tool Windows → **SB Tools**.
+   - Kattints az **Attach & Inject** gombra, majd a **Bind Spring Context** actionre (vagy a kombó gyorsgombra).
+   - Válaszd ki a REPL editorban a kódot, és üsd le a **Ctrl+Enter**-t.
+   - Az alsó sávban a **HTTP** linkkel nyisd meg a request esetszerkesztőt: itt endpointokat, bodykat, headereket tárolhatsz, Play/Abort gombbal futtathatsz, a konzolban azonnal látod az eredményt.
+
+### Gyors workflow (összefoglalva)
+1. A Spring projektben felveszed a fenti `sb-repl-bridge` + `sb-repl-agent` függőségeket, és `@ComponentScan`-nel engedélyezed a `com.baader.sbrepl.bridge` csomagot.
+2. Fut a Spring Boot app → IntelliJ-ben megnyitod az **SB Tools** tool windowt.
+3. **Attach & Inject** → **Bind Spring Context** → REPL editorban `Ctrl+Enter`.
+4. HTTP tabon elmented a gyakori REST hívásokat (endpoint, JSON body, header). Play gomb → eredmény azonnal a konzolon; **httpReq.perform(caseId)** snippetet is beszúrhatsz, hogy ugyanazt a kérést Java kódból futtasd.
 
 ## Highlighted plugin features
 - Tool window with console + editor, syntax highlighting, Ctrl+Enter execution.

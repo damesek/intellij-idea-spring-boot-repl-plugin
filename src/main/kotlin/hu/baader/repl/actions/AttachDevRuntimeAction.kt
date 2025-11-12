@@ -9,6 +9,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.application.ApplicationManager
 import hu.baader.repl.nrepl.NreplService
 import hu.baader.repl.settings.PluginSettingsState
 import java.io.File
@@ -23,6 +24,16 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
 
         var agentJar = settings.agentJarPath.trim()
         if (agentJar.isEmpty() || !File(agentJar).exists()) {
+            // Prefer dev-runtime agent built from this repo if available (JShell features)
+            val devRt = resolveDevRuntimeFromProject()
+            if (devRt != null) {
+                agentJar = devRt.absolutePath
+                settings.agentJarPath = agentJar
+                notify(project, "Using dev-runtime agent (${devRt.name}).", NotificationType.INFORMATION)
+            }
+        }
+        if (agentJar.isEmpty() || !File(agentJar).exists()) {
+            // Fallback to Maven local wrapper if present
             val autoJar = resolveAgentFromMaven(settings)
             if (autoJar != null) {
                 agentJar = autoJar.absolutePath
@@ -106,6 +117,15 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
                 PluginSettingsState.getInstance().state.port = settings.agentPort
                 svc.connectAsync()
                 notify(project, "Connecting to dev runtime on ${settings.agentPort}…", NotificationType.INFORMATION)
+                // After connect, check capabilities; if legacy mode, offer to pick dev-runtime jar
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    try { Thread.sleep(1500) } catch (_: InterruptedException) {}
+                    ApplicationManager.getApplication().invokeLater {
+                        if (!svc.isJshellMode()) {
+                            notify(project, "Legacy agent detected (no JShell). Select dev-runtime-agent JAR for full features.", NotificationType.WARNING)
+                        }
+                    }
+                }
             } catch (t: Throwable) {
                 notify(project, "Connect failed after injection: ${t.message}", NotificationType.WARNING)
             }
@@ -127,5 +147,15 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
         val candidate = Paths.get(home, ".m2", "repository", "hu", "baader", "sb-repl-agent", version,
             "sb-repl-agent-$version.jar").toFile()
         return candidate.takeIf { it.exists() }
+    }
+
+    private fun resolveDevRuntimeFromProject(): File? {
+        return try {
+            val base = System.getProperty("user.dir") ?: return null
+            val dir = Paths.get(base, "dev-runtime", "build", "libs").toFile()
+            if (dir.exists()) {
+                dir.listFiles { f -> f.isFile && f.name.endsWith(".jar") && f.name.contains("dev-runtime-agent") }?.maxByOrNull { it.lastModified() }
+            } else null
+        } catch (_: Throwable) { null }
     }
 }

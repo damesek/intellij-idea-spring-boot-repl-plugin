@@ -53,7 +53,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = "241.0"
-            untilBuild = "251.*"  // Support up to 2025.1
+            untilBuild = "252.*"  // Support up to 2025.2
         }
     }
 }
@@ -63,6 +63,9 @@ intellijPlatform {
 tasks.named("runIde").configure {
     (this as org.gradle.api.tasks.JavaExec).apply {
         val current = jvmArgs ?: listOf()
-        jvmArgs = current + listOf("-Didea.plugins.disabled=com.intellij.gradle")
+        // Disable Gradle plugin in sandbox IDE to avoid GradleJvmSupportMatrix errors
+        jvmArgs = current + listOf(
+            "-Didea.plugins.disabled=com.intellij.gradle,org.jetbrains.plugins.gradle"
+        )
     }
 }

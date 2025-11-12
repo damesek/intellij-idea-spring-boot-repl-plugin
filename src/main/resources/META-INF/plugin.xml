@@ -21,7 +21,7 @@
     
     <extensions defaultExtensionNs="com.intellij">
         <!-- Tool Window -->
-        <toolWindow id="Java REPL"
+        <toolWindow id="SB Tools"
                     factoryClass="hu.baader.repl.ui.JavaReplToolWindowFactory"
                     anchor="bottom"/>
 
@@ -35,18 +35,18 @@
         <postStartupActivity implementation="hu.baader.repl.nrepl.ProjectStartup"/>
 
         <!-- Notification Group -->
-        <notificationGroup id="Java REPL"
+        <notificationGroup id="SB Tools"
                           displayType="BALLOON"/>
 
-        <!-- Project Service for Run Configurations persistence -->
-        <projectService serviceImplementation="hu.baader.repl.ui.RunConfigService"/>
+        <!-- Project Service for HTTP request cases -->
+        <projectService serviceImplementation="hu.baader.repl.ui.HttpRequestService"/>
     </extensions>
     
     <actions>
         <!-- Run Selection Action -->
         <action id="hu.baader.repl.RunEditorSelection"
                 class="hu.baader.repl.actions.RunEditorSelectionAction"
-                text="Run Selection in Java REPL"
+                text="Run Selection in SB Tools"
                 description="Send current editor's selection (or file) to Java-over-nREPL">
             <add-to-group group-id="CodeMenu" anchor="last"/>
             <keyboard-shortcut first-keystroke="ctrl shift R" keymap="$default"/>
@@ -55,7 +55,7 @@
         <!-- Editor Popup Menu -->
         <action id="hu.baader.repl.RunEditorSelectionPopup"
                 class="hu.baader.repl.actions.RunEditorSelectionAction"
-                text="Run Selection in Java REPL">
+                text="Run Selection in SB Tools">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
 

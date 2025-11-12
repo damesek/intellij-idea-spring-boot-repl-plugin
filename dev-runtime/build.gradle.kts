@@ -5,10 +5,24 @@ plugins {
 group = "hu.baader"
 version = "1.0-SNAPSHOT"
 
+repositories {
+    mavenCentral()
+}
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
+}
+
+dependencies {
+    compileOnly("org.springframework:spring-context:6.0.13")
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.jar {

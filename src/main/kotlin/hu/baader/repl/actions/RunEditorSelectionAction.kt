@@ -8,7 +8,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import hu.baader.repl.nrepl.NreplService
 
-class RunEditorSelectionAction : AnAction("Run Selection in Java REPL") {
+class RunEditorSelectionAction : AnAction("Run Selection in SB Tools") {
     override fun actionPerformed(e: AnActionEvent) {
         val project: Project = e.project ?: return
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
@@ -28,7 +28,7 @@ class RunEditorSelectionAction : AnAction("Run Selection in Java REPL") {
         }
         
         try {
-            service.evalJava(text)
+            service.eval(text)
             showNotification(project, "Code sent to Java REPL", NotificationType.INFORMATION)
         } catch (ex: Exception) {
             showNotification(project, "Failed to execute: ${ex.message}", NotificationType.ERROR)
@@ -45,16 +45,16 @@ class RunEditorSelectionAction : AnAction("Run Selection in Java REPL") {
         if (project != null) {
             val service = NreplService.getInstance(project)
             e.presentation.text = if (service.isConnected()) {
-                "Run Selection in Java REPL (Connected)"
+                "Run Selection in SB Tools (Connected)"
             } else {
-                "Run Selection in Java REPL (Disconnected)"
+                "Run Selection in SB Tools (Disconnected)"
             }
         }
     }
     
     private fun showNotification(project: Project, message: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Java REPL")
+            .getNotificationGroup("SB Tools")
             .createNotification(message, type)
             .notify(project)
     }

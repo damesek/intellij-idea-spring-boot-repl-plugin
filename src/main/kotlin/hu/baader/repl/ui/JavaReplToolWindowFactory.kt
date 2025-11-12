@@ -11,33 +11,35 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.EditorFactory
-import com.intellij.lang.java.JavaLanguage
 import com.intellij.ide.highlighter.JavaFileType
-import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.editor.EditorSettings
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiFileFactory
+import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.openapi.ui.Splitter
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ui.JBColor
 import hu.baader.repl.nrepl.NreplService
 import hu.baader.repl.history.ReplHistoryService
 import javax.swing.JPanel
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import com.intellij.icons.AllIcons
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.command.WriteCommandAction
-import hu.baader.repl.editor.JavaReplEditorProvider
-import hu.baader.repl.editor.ReplJavaFormatter
 import hu.baader.repl.settings.PluginSettingsState
-import com.intellij.testFramework.LightVirtualFile
+import java.awt.FlowLayout
 import javax.swing.JList
+import javax.swing.BorderFactory
+import java.awt.Font
+import java.awt.Color
+import com.intellij.psi.PsiFileFactory
+import com.intellij.psi.codeStyle.CodeStyleManager
 import kotlin.text.Regex
 
 class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
@@ -46,7 +48,17 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         val console: ConsoleView = consoleImpl
         Disposer.register(toolWindow.disposable, console)
 
-        // Create editor with Java file type for syntax highlighting
+        val codeSnippetContentType = ConsoleViewContentType(
+            "REPL_CODE_SNIPPET",
+            TextAttributes(
+                JBColor(Color(0x3A3A3A), Color(0xDDDDDD)),
+                JBColor(Color(0xF8F8FA), Color(0x2F2F2F)),
+                null,
+                null,
+                Font.PLAIN
+            )
+        )
+
         val document = EditorFactory.getInstance().createDocument("")
         val editor = EditorFactory.getInstance().createEditor(
             document,
@@ -55,30 +67,24 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             false
         ) as EditorEx
 
-        // Configure editor for Java
         editor.settings.apply {
             isLineNumbersShown = true
             isIndentGuidesShown = true
             isCaretRowShown = true
             isFoldingOutlineShown = true
-            isAutoCodeFoldingEnabled = false  // Disable auto-folding in REPL
             setTabSize(4)
             isSmartHome = true
-            isWhitespacesShown = false
-            isAdditionalPageAtBottom = false
         }
 
-        // Set up Java syntax highlighter properly
         val highlighter = EditorHighlighterFactory.getInstance().createEditorHighlighter(
             project,
-            "ReplSession.java"
+            JavaFileType.INSTANCE
         )
         editor.highlighter = highlighter
 
-        // Project-scoped persistent history
         val historyService = ReplHistoryService.getInstance(project)
         val history = historyService.entries()
-        var historyIndex = history.size // points to next slot after last entry
+        var historyIndex = history.size
         val lastErrorBuffer = StringBuilder()
 
         val service = NreplService.getInstance(project)
@@ -102,11 +108,11 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             val preferred = sanitizeVarName(bean.name)
             val fallback = sanitizeVarName(simpleClassName(targetClass))
             val varName = listOf(preferred, fallback, "bean").first { it.isNotBlank() }
-            val snippet = "var $varName = applicationContext.getBean($targetClass.class);\n"
+            val snippet = "var $varName = com.baader.devrt.ReplBindings.applicationContext() != null ? ((org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext()).getBean($targetClass.class) : null;\n"
             WriteCommandAction.runWriteCommandAction(project) {
-                val document = editor.document
+                val doc = editor.document
                 val offset = editor.caretModel.offset
-                document.insertString(offset, snippet)
+                doc.insertString(offset, snippet)
                 editor.caretModel.moveToOffset(offset + snippet.length)
             }
         }
@@ -181,38 +187,32 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 .filter { it.enabled && it.alias.isNotBlank() && it.fqn.isNotBlank() }
                 .sortedByDescending { it.alias.length }
             for (alias in aliases) {
-                val pattern = Regex("(?<![\\w$])${Regex.escape(alias.alias)}(?![\\w$])")
+                val pattern = Regex("(?<![\\w$])" + Regex.escape(alias.alias) + "(?![\\w$])")
                 updated = pattern.replace(updated, alias.fqn)
             }
             return updated
         }
 
-        // Handle nREPL messages; capture unsub to dispose later
         val unsub = service.onMessage { msg ->
             val out = msg["out"]
             if (out != null) {
                 console.print(out, ConsoleViewContentType.NORMAL_OUTPUT)
             }
-            
             val value = msg["value"]
             if (value != null) {
                 console.print("=> $value\n", ConsoleViewContentType.SYSTEM_OUTPUT)
             }
-            
             val err = msg["err"]
             if (err != null) {
                 console.print(err, ConsoleViewContentType.ERROR_OUTPUT)
-                // Keep full error text for the "Show Last Error" action
                 lastErrorBuffer.append(err)
             }
-            
             val ex = msg["ex"]
             if (ex != null) {
                 console.print("Exception: $ex\n", ConsoleViewContentType.ERROR_OUTPUT)
             }
         }
 
-        // Run action - executes selected text or entire document
         val run = object : AnAction("Execute", "Execute selected code or entire document (Ctrl+Enter)", AllIcons.Actions.Execute) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
@@ -220,33 +220,32 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 if (rawText.isNotBlank()) {
                     var text = rawText
                     try {
-                        console.print(">> Executing Java code...\n", ConsoleViewContentType.USER_INPUT)
-                        // Save to history
+                        console.print("\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                        console.print(">> Executing Java code...\n", codeSnippetContentType)
                         historyService.add(rawText)
                         historyIndex = history.size
-                        // Reset last error buffer
                         lastErrorBuffer.setLength(0)
-                        // Convenience: if Spring is bound, inject typed applicationContext variable
-                        if (service.isSpringBound()) {
-                            val pre = "org.springframework.context.ApplicationContext applicationContext = (org.springframework.context.ApplicationContext) ctx;\n"
-                            if (!text.contains("org.springframework.context.ApplicationContext applicationContext")) {
-                                text = pre + text
-                            }
-                        }
                         text = applyImportAliases(text)
-                        service.evalJava(text)
+                        val snippetForDisplay = text.trim()
+                        if (snippetForDisplay.isNotEmpty()) {
+                            val decoratedSnippet = buildString {
+                                append("\n")
+                                append(snippetForDisplay)
+                                if (!snippetForDisplay.endsWith("\n")) append("\n")
+                                append("\n")
+                            }
+                            console.print(decoratedSnippet, codeSnippetContentType)
+                        }
+                        service.eval(text)
                     } catch (ex: Exception) {
                         console.print("Error: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                     }
                 }
             }
-            
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabled = service.isConnected()
             }
         }
-        
-        // Register Ctrl+Enter shortcut
         run.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER"), editor.component)
 
         val hotSwap = object : AnAction("Hot Swap", "Compile and reload selected class into target JVM", AllIcons.Actions.BuildLoadChanges) {
@@ -275,60 +274,26 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                     console.print("HotSwap error: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                 }
             }
-
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabled = service.isConnected()
             }
         }
 
-        // Format code action (Ctrl+Alt+L)
         val formatCode = object : AnAction("Format Code", "Format Java code", AllIcons.Actions.ReformatCode) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val text = editor.document.text
-                    // Use simple formatting that actually works
-                    val formatted = formatJavaCode(text)
-                    editor.document.setText(formatted)
-                }
-            }
-
-            private fun formatJavaCode(code: String): String {
-                val lines = code.split("\n")
-                val formatted = mutableListOf<String>()
-                var indent = 0
-
-                for (line in lines) {
-                    val trimmed = line.trim()
-                    if (trimmed.isEmpty()) {
-                        formatted.add("")
-                        continue
-                    }
-
-                    // Decrease indent for closing braces
-                    if (trimmed.startsWith("}") || trimmed.startsWith("else")) {
-                        indent = maxOf(0, indent - 1)
-                    }
-
-                    // Add the line with proper indentation
-                    formatted.add("    ".repeat(indent) + trimmed)
-
-                    // Increase indent after opening braces
-                    if (trimmed.endsWith("{") ||
-                        trimmed.startsWith("if ") && trimmed.endsWith(")") ||
-                        trimmed.startsWith("for ") && trimmed.endsWith(")") ||
-                        trimmed.startsWith("while ") && trimmed.endsWith(")")) {
-                        indent++
-                    }
-
-                    // Handle single line if/for/while
-                    if ((trimmed.startsWith("if ") || trimmed.startsWith("for ") ||
-                         trimmed.startsWith("while ")) && !trimmed.endsWith("{") && !trimmed.endsWith(")")) {
-                        // Don't increase indent for single-line statements
+                val projectRef = e.project ?: project
+                val documentRef = editor.document
+                WriteCommandAction.runWriteCommandAction(projectRef) {
+                    try {
+                        val psiFile = PsiFileFactory.getInstance(projectRef)
+                            .createFileFromText("ReplSnippet.java", JavaFileType.INSTANCE, documentRef.text)
+                        CodeStyleManager.getInstance(projectRef).reformat(psiFile)
+                        documentRef.setText(psiFile.text)
+                    } catch (ex: Exception) {
+                        console.print("Format failed: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                     }
                 }
-
-                return formatted.joinToString("\n")
             }
         }
         formatCode.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl alt L"), editor.component)
@@ -349,47 +314,51 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                     console.print("Bean lookup error: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                 }
             }
-
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabled = service.isConnected() && service.isSpringBound()
             }
         }
 
-        // Remove code completion for now - it needs more complex setup
-        // We'll rely on manual typing and the Loaded Variables panel
-
-        // Connect action
-        val connect = object : AnAction("Connect", "Connect to nREPL server", AllIcons.RunConfigurations.Remote) {
+        val connect = object : AnAction("Connect", "Connect to nREPL server", AllIcons.Actions.Run_anything) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
                 try {
                     console.print("Connecting to nREPL server...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                    service.connectAsync()
-                    console.print("Connected successfully!\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    service.connectAsync { isJshell ->
+                        ApplicationManager.getApplication().invokeLater {
+                            console.print("Connected successfully!\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                            if (isJshell) {
+                                console.print("Mode: JShell session (stateful imports & defs)\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                console.print("Automatically binding Spring context...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                service.bindSpring(
+                                    onResult = { msg -> console.print("Auto-bind successful: $msg\n", ConsoleViewContentType.SYSTEM_OUTPUT) },
+                                    onError = { err -> console.print("Auto-bind failed: $err\n", ConsoleViewContentType.ERROR_OUTPUT) }
+                                )
+                            } else {
+                                console.print("Mode: Legacy (java-eval). For values, use 'return ...;\n'", ConsoleViewContentType.SYSTEM_OUTPUT)
+                            }
+                        }
+                    }
                 } catch (t: Throwable) {
                     console.print("Connect failed: ${t.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                 }
             }
-            
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabled = !service.isConnected()
             }
         }
 
-        // Disconnect action
         val disconnect = object : AnAction("Disconnect", "Disconnect from nREPL server", AllIcons.Actions.Cancel) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
                 service.disconnect()
                 console.print("Disconnected from nREPL server\n", ConsoleViewContentType.SYSTEM_OUTPUT)
             }
-            
             override fun update(e: AnActionEvent) {
                 e.presentation.isEnabled = service.isConnected()
             }
         }
         
-        // Clear console action
         val clear = object : AnAction("Clear Console", "Clear console output", AllIcons.Actions.GC) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
@@ -421,11 +390,11 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 JBPopupFactory.getInstance()
                     .createPopupChooserBuilder(entries)
                     .setTitle("History")
-                    .setItemChosenCallback { selected ->
+                    .setItemChosenCallback {
                         WriteCommandAction.runWriteCommandAction(project) {
-                            editor.document.setText(selected)
+                            editor.document.setText(it)
                             editor.caretModel.moveToOffset(editor.document.textLength)
-                            historyIndex = history.indexOf(selected) + 1
+                            historyIndex = history.indexOf(it) + 1
                         }
                     }
                     .createPopup()
@@ -457,170 +426,30 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 e.presentation.isEnabled = history.isNotEmpty()
             }
         }
-
-        // Snapshot helper actions (server provides hu.vernyomas.app.repl.SnapshotStore)
-        val listSnapshots = object : AnAction("List Snapshots", "Show all saved snapshots", AllIcons.Nodes.DataSchema) {
+        
+        val resetSession = object : AnAction("Reset Session", "Reset JShell session (imports and definitions)", AllIcons.Actions.Rollback) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
-                try {
-                    service.listAgentSnapshots(onResult = { tsv ->
-                        console.print("\n--- Snapshots (name\ttype\tmode\tts\tsize) ---\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                        console.print(tsv.ifBlank { "(empty)\n" }, ConsoleViewContentType.SYSTEM_OUTPUT)
-                        console.print("----------------------------------------------\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                    }, onError = { err ->
-                        console.print("List failed: $err\n", ConsoleViewContentType.ERROR_OUTPUT)
-                    })
-                } catch (t: Throwable) {
-                    console.print("List failed: ${t.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
-                }
-            }
-        }
-
-        val bindSnapshot = object : AnAction("Load Snapshot", "Load a saved snapshot into a variable", AllIcons.Actions.Download) {
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
-            override fun actionPerformed(e: AnActionEvent) {
-                val name = com.intellij.openapi.ui.Messages.showInputDialog(
-                    project,
-                    "Snapshot name (handle)",
-                    "Bind Snapshot",
-                    AllIcons.General.Locate
-                ) ?: return
-                val type = com.intellij.openapi.ui.Messages.showInputDialog(
-                    project,
-                    "Target type FQN (optional, leave empty for Object)",
-                    "Bind Snapshot",
-                    AllIcons.General.Locate
+                service.resetSession(
+                    onResult = { console.print("Session reset.\n", ConsoleViewContentType.SYSTEM_OUTPUT) },
+                    onError = { err -> console.print("Reset failed: $err\n", ConsoleViewContentType.ERROR_OUTPUT) }
                 )
-                val fqn = type?.trim().orEmpty()
-                // Use reflection to avoid compile-time dependency on agent classes
-                val snippet = if (fqn.isNotEmpty()) {
-                    """
-                    try {
-                      Class<?> ss = Class.forName("com.baader.devrt.SnapshotStore");
-                      java.lang.reflect.Method gm;
-                      try { gm = ss.getMethod("get", String.class); }
-                      catch (NoSuchMethodException ex) { gm = ss.getDeclaredMethod("get", String.class); gm.setAccessible(true); }
-                      Object tmp = gm.invoke(null, "$name");
-                      var $name = ($fqn) tmp;
-                    } catch (Throwable t) { t.printStackTrace(); }
-                    """.trimIndent()
-                } else {
-                    """
-                    try {
-                      Class<?> ss = Class.forName("com.baader.devrt.SnapshotStore");
-                      java.lang.reflect.Method gm;
-                      try { gm = ss.getMethod("get", String.class); }
-                      catch (NoSuchMethodException ex) { gm = ss.getDeclaredMethod("get", String.class); gm.setAccessible(true); }
-                      Object $name = gm.invoke(null, "$name");
-                    } catch (Throwable t) { t.printStackTrace(); }
-                    """.trimIndent()
-                }
-
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val doc = editor.document
-                    doc.insertString(0, snippet)
-                }
             }
+            override fun update(e: AnActionEvent) { e.presentation.isEnabled = service.isConnected() }
         }
 
-        // Edit Configurations action - opens Run Config tab
-        val editConfigurations = object : AnAction("Edit Configurations", "Open Run Configurations tab", AllIcons.General.Settings) {
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
-            override fun actionPerformed(e: AnActionEvent) {
-                // Switch to Run Config tab
-                val runConfigContent = toolWindow.contentManager.contents.find { it.tabName == "Run Config" }
-                if (runConfigContent != null) {
-                    toolWindow.contentManager.setSelectedContent(runConfigContent)
-                }
-            }
-        }
-
-        // Create toolbar (include Attach & Inject + Bind Spring actions here as well)
         val am = ActionManager.getInstance()
-        val attachDevRuntime = am.getAction("hu.baader.repl.AttachDevRuntime")
         val bindSpringCtx = am.getAction("hu.baader.repl.BindSpringContext")
 
-        // Quick Actions dropdown (Attach & Bind together)
-        val quickActionsGroup = object : DefaultActionGroup("Quick Actions", true) {
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
-        }.apply {
-            templatePresentation.icon = AllIcons.RunConfigurations.TestState.Run // Orange play icon
-
-            // Combined Attach & Bind action
-            val attachAndBind = object : AnAction("Attach & Bind manual", "Manually attach agent and bind Spring context", AllIcons.Actions.Execute) {
-                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
-                override fun actionPerformed(e: AnActionEvent) {
-                    // First run the attach action
-                    attachDevRuntime?.actionPerformed(e)
-                    // Wait a bit for attachment to complete, then bind
-                    ApplicationManager.getApplication().executeOnPooledThread {
-                        Thread.sleep(1500)
-                        ApplicationManager.getApplication().invokeLater {
-                            // Then run the bind action
-                            bindSpringCtx?.actionPerformed(e)
-                        }
-                    }
-                }
-
-                override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = attachDevRuntime != null && bindSpringCtx != null
-                }
-            }
-            add(attachAndBind)
-
-            // Run template action - uses saved configuration from Run Config panel
-            val runTemplate = object : AnAction("Run template", "Use saved configuration to connect", AllIcons.Actions.Lightning) {
-                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
-                override fun actionPerformed(e: AnActionEvent) {
-                    // We'll store the RunConfigPanel reference when we create it later
-                    ApplicationManager.getApplication().invokeLater {
-                        // Switch to Run Config tab
-                        val runConfigContent = toolWindow.contentManager.contents.find { it.tabName == "Run Config" }
-                        if (runConfigContent != null) {
-                            toolWindow.contentManager.setSelectedContent(runConfigContent)
-                            // Trigger the start action after a small delay to ensure tab is visible
-                            ApplicationManager.getApplication().invokeLater {
-                                val runConfigPanel = runConfigContent.component
-                                if (runConfigPanel is RunConfigPanel) {
-                                    runConfigPanel.startFromTemplate()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            add(runTemplate)
-
-            add(Separator.create())
-            // Individual actions for more control
-            attachDevRuntime?.let { add(it) }
-            bindSpringCtx?.let { add(it) }
-        }
-
-        val group = DefaultActionGroup().apply {
-            // Primary actions
-            add(run)
+        val topActionGroup = DefaultActionGroup().apply {
             add(hotSwap)
-            add(formatCode)
-            add(beanHelper)
             add(Separator.create())
-
-            // Quick Actions dropdown
-            add(quickActionsGroup)
-            add(Separator.create())
-
-            // Connection actions
-            add(editConfigurations)  // Edit Configurations at the beginning of connection section
             add(connect)
             add(disconnect)
+            bindSpringCtx?.let { add(it) }
+            add(beanHelper)
+            add(resetSession) // Keep session reset at the top
             add(Separator.create())
-
-            // Data management actions
-            add(listSnapshots)
-            add(bindSnapshot)
-            add(Separator.create())
-
-            // History and utility actions
             add(historyPrevAction)
             add(historyNextAction)
             add(showHistory)
@@ -629,28 +458,57 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             add(clear)
         }
 
-        val toolbar = am.createActionToolbar(
-            "JavaReplToolbar",
-            group,
-            true
-        )
+        val topToolbar = am.createActionToolbar("JavaReplTopToolbar", topActionGroup, true)
+        val httpRunner = HttpRequestRunner(project, console)
+        
+        val bottomActionGroup = DefaultActionGroup().apply {
+            add(formatCode)
+            add(run)
+        }
+        val bottomToolbar = am.createActionToolbar("JavaReplBottomToolbar", bottomActionGroup, true)
+        bottomToolbar.targetComponent = editor.component
+        val bottomButtonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
+            add(bottomToolbar.component)
+        }
+        val cardPanel = JPanel(CardLayout())
+        lateinit var httpQuickPanel: HttpQuickActionsPanel
+        val httpCard = JPanel(BorderLayout()).apply {
+            httpQuickPanel = HttpQuickActionsPanel(project, httpRunner) { expanded ->
+                val layout = cardPanel.layout as CardLayout
+                if (expanded) layout.show(cardPanel, "http") else layout.show(cardPanel, "editor")
+            }
+            add(httpQuickPanel, BorderLayout.CENTER)
+        }
+        val bottomBar = JPanel(BorderLayout()).apply {
+            val httpLink = com.intellij.ui.components.labels.LinkLabel<String>("HTTP", null).apply {
+                setListener({ _, _ -> httpQuickPanel.expandPanel() }, null)
+            }
+            httpLink.toolTipText = "HTTP esetek megnyitása"
+            httpLink.border = BorderFactory.createEmptyBorder(0, 8, 0, 0)
+            add(httpLink, BorderLayout.WEST)
+            add(bottomButtonPanel, BorderLayout.EAST)
+        }
+        val editorCard = JPanel(BorderLayout()).apply {
+            add(JBScrollPane(editor.component), BorderLayout.CENTER)
+            add(bottomBar, BorderLayout.SOUTH)
+        }
+        cardPanel.add(editorCard, "editor")
+        cardPanel.add(httpCard, "http")
+        (cardPanel.layout as CardLayout).show(cardPanel, "editor")
 
-        // Layout panel - editor and console split
-        val split = Splitter(true, 0.65f).apply {
-            setFirstComponent(JBScrollPane(editor.component))
-            setSecondComponent(console.component)
+        val editorPanel = cardPanel
+
+        val mainConsoleSplit = Splitter(true, 0.75f).apply {
+            firstComponent = console.component
+            secondComponent = editorPanel
         }
 
-        // Panel for toolbar and content
-        val panel = JPanel(BorderLayout()).apply {
-            add(toolbar.component, BorderLayout.NORTH)
-            add(split, BorderLayout.CENTER)
+        val mainPanel = JPanel(BorderLayout()).apply {
+            add(topToolbar.component, BorderLayout.NORTH)
+            add(mainConsoleSplit, BorderLayout.CENTER)
         }
+        topToolbar.targetComponent = mainPanel
 
-        // Improve action context resolution
-        toolbar.targetComponent = panel
-
-        // History navigation with Up/Down arrows (when at first/last line)
         editor.contentComponent.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
                 val caret = editor.caretModel
@@ -658,116 +516,80 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 val lineCount = doc.lineCount
                 val caretLine = caret.logicalPosition.line
                 when (e.keyCode) {
-                    KeyEvent.VK_UP -> {
-                        if (caretLine == 0 && history.isNotEmpty()) {
-                            loadHistoryEntry(-1)
-                            e.consume()
-                        }
-                    }
-                    KeyEvent.VK_DOWN -> {
-                        if (caretLine == lineCount - 1) {
-                            loadHistoryEntry(1)
-                            e.consume()
-                        }
-                    }
+                    KeyEvent.VK_UP -> if (caretLine == 0 && history.isNotEmpty()) { loadHistoryEntry(-1); e.consume() }
+                    KeyEvent.VK_DOWN -> if (caretLine == lineCount - 1) { loadHistoryEntry(1); e.consume() }
                 }
             }
         })
 
-        // Alternative shortcuts: Ctrl+Up / Ctrl+Down for history
-        val prevCmd = object : AnAction() {
-            override fun actionPerformed(e: AnActionEvent) {
-                loadHistoryEntry(-1)
-            }
-        }
+        val prevCmd = object : AnAction() { override fun actionPerformed(e: AnActionEvent) { loadHistoryEntry(-1) } }
         prevCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl UP"), editor.component)
 
-        val nextCmd = object : AnAction() {
-            override fun actionPerformed(e: AnActionEvent) {
-                loadHistoryEntry(1)
-            }
-        }
+        val nextCmd = object : AnAction() { override fun actionPerformed(e: AnActionEvent) { loadHistoryEntry(1) } }
         nextCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl DOWN"), editor.component)
 
-        // Create a split pane for the main content
-        val mainSplitter = Splitter(false, 0.8f) // Horizontal split, 80% for main area
-        mainSplitter.setFirstComponent(panel) // Left side - original content
+        val mainSplitter = Splitter(false, 0.8f)
+        mainSplitter.setFirstComponent(mainPanel)
 
-        val content = ContentFactory.getInstance().createContent(mainSplitter, "Session", false)
-        // Ensure editor and console are disposed with this content
-        content.setDisposer(Disposable {
-            try {
-                unsub.dispose()
-            } catch (_: Throwable) {}
-            try {
-                EditorFactory.getInstance().releaseEditor(editor)
-            } catch (_: Throwable) {}
+        val toggleSidePanelAction = object : ToggleAction("Toggle Variables Panel", "Show/Hide the variables panel", AllIcons.Actions.SplitVertically) {
+            override fun isSelected(e: AnActionEvent): Boolean = mainSplitter.secondComponent?.isVisible ?: false
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                mainSplitter.secondComponent?.isVisible = state
+                mainSplitter.proportion = if (state) 0.8f else 1.0f
+            }
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+        }
+        topActionGroup.add(Separator.create(), Constraints.LAST)
+        topActionGroup.add(toggleSidePanelAction, Constraints.LAST)
+
+        val sessionContent = ContentFactory.getInstance().createContent(mainSplitter, "REPL", false)
+        sessionContent.setDisposer(Disposable { 
+            try { unsub.dispose() } catch (_: Throwable) {}
+            try { EditorFactory.getInstance().releaseEditor(editor) } catch (_: Throwable) {}
+            try { httpQuickPanel.dispose() } catch (_: Throwable) {}
         })
-        Disposer.register(toolWindow.disposable) {
-            try {
-                unsub.dispose()
-            } catch (_: Throwable) {}
-            try {
-                EditorFactory.getInstance().releaseEditor(editor)
-            } catch (_: Throwable) {}
+        
+        val insertIntoEditor: (String) -> Unit = { snippet ->
+            WriteCommandAction.runWriteCommandAction(project) {
+                val editorDocument = editor.document
+                val offset = editor.caretModel.offset
+                editorDocument.insertString(offset, snippet)
+                editor.caretModel.moveToOffset(offset + snippet.length)
+            }
         }
 
-        // Right side - loaded variables panel
         val loadedVariablesPanel = LoadedVariablesPanel(
             connection = { service.takeIf { it.isConnected() } },
-            insertSnippet = { snippet ->
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val document = editor.document
-                    val offset = editor.caretModel.offset
-                    document.insertString(offset, snippet)
-                    editor.caretModel.moveToOffset(offset + snippet.length)
-                }
-            },
+            insertSnippet = insertIntoEditor,
             executeCode = { code ->
-                // Silent execution for variable injection
                 if (service.isConnected()) {
-                    service.evalJava(code)
+                    service.eval(code)
                 }
             }
         )
+        mainSplitter.setSecondComponent(loadedVariablesPanel)
+        loadedVariablesPanel.isVisible = false
+        mainSplitter.proportion = 1.0f
+        
+        toolWindow.contentManager.addContent(sessionContent)
 
-        val importAliasesPanel = ImportAliasesPanel()
-        val sideSplitter = Splitter(true, 0.5f).apply {
-            firstComponent = loadedVariablesPanel
-            secondComponent = importAliasesPanel
-        }
-
-        // Add the variables + imports panel to the right side
-        mainSplitter.setSecondComponent(sideSplitter)
-
-        // Add the Session tab content - FIRST (main work area)
-        toolWindow.contentManager.addContent(content)
-
-        // Simplified Snapshots panel tab - SECOND (data management)
-        val currentEditor = editor // capture reference for lambda
         val snapshotsPanel = SimplifiedSnapshotsPanel(
             connection = { service.takeIf { it.isConnected() } },
-            insertSnippet = { snippet ->
-                WriteCommandAction.runWriteCommandAction(project) {
-                    val document = currentEditor.document
-                    val offset = currentEditor.caretModel.offset
-                    document.insertString(offset, snippet)
-                    currentEditor.caretModel.moveToOffset(offset + snippet.length)
-                }
-            },
+            insertSnippet = insertIntoEditor,
             onVariableLoaded = { name, value ->
-                // When a snapshot is loaded, add it to the variables panel
                 loadedVariablesPanel.addLoadedVariable(name, value)
             }
         )
         val snapshotsContent = ContentFactory.getInstance().createContent(snapshotsPanel, "Snapshots", false)
         toolWindow.contentManager.addContent(snapshotsContent)
-        // Only reload if connected
-        if (service.isConnected()) snapshotsPanel.refresh()
 
-        // Run Configuration panel tab - THIRD/LAST (configuration management)
-        val runConfigPanel = RunConfigPanel(project, connection = { service })
-        val runConfigContent = ContentFactory.getInstance().createContent(runConfigPanel, "Run Config", false)
-        toolWindow.contentManager.addContent(runConfigContent)
+        val httpPanel = HttpRequestsPanel(
+            project = project,
+            insertSnippet = insertIntoEditor,
+            runner = httpRunner,
+            onCasesChanged = { httpQuickPanel.refreshCases() }
+        )
+        val httpContent = ContentFactory.getInstance().createContent(httpPanel, "HTTP", false)
+        toolWindow.contentManager.addContent(httpContent)
     }
 }
