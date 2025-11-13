@@ -52,20 +52,20 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
    ./gradlew buildPlugin
    # install build/distributions/sb-repl-*.zip via File → Settings → Plugins → Install from Disk
    ```
-   The new Attach action will automatically pull the agent JAR from `~/.m2/repository/hu/baader/sb-repl-agent/...` if you installed it locally.
+   The **Connect** button automatically loads the agent from `~/.m2/repository/hu/baader/sb-repl-agent/...` if you have it installed locally.
 
 3. **Use the REPL + HTTP panel**
-   - Indítsd el a Spring Boot appot (a bridge automatikusan publikálja az `ApplicationContext`-et az agent felé).
+   - Start your Spring Boot app (the bridge auto-publishes the `ApplicationContext` toward the agent).
    - IntelliJ → View → Tool Windows → **SB Tools**.
-   - Kattints az **Attach & Inject** gombra, majd a **Bind Spring Context** actionre (vagy a kombó gyorsgombra).
-   - Válaszd ki a REPL editorban a kódot, és üsd le a **Ctrl+Enter**-t.
-   - Az alsó sávban a **HTTP** linkkel nyisd meg a request esetszerkesztőt: itt endpointokat, bodykat, headereket tárolhatsz, Play/Abort gombbal futtathatsz, a konzolban azonnal látod az eredményt.
+   - Hit the single **Connect** button (connects to the JVM, loads the agent, binds the Spring context).
+   - Select code in the REPL editor and press **Ctrl+Enter** to execute it.
+   - Use the **HTTP** link in the bottom bar to open the request case manager. Save endpoints/bodies/headers, hit Play/Abort to run them, and watch the response appear instantly in the console.
 
-### Gyors workflow (összefoglalva)
-1. A Spring projektben felveszed a fenti `sb-repl-bridge` + `sb-repl-agent` függőségeket, és `@ComponentScan`-nel engedélyezed a `com.baader.sbrepl.bridge` csomagot.
-2. Fut a Spring Boot app → IntelliJ-ben megnyitod az **SB Tools** tool windowt.
-3. **Attach & Inject** → **Bind Spring Context** → REPL editorban `Ctrl+Enter`.
-4. HTTP tabon elmented a gyakori REST hívásokat (endpoint, JSON body, header). Play gomb → eredmény azonnal a konzolon; **httpReq.perform(caseId)** snippetet is beszúrhatsz, hogy ugyanazt a kérést Java kódból futtasd.
+### Quick workflow (at a glance)
+1. Add the `sb-repl-bridge` + `sb-repl-agent` dependencies and enable `@ComponentScan({"com.intuitech.cvprocessor","com.baader.sbrepl.bridge"})` in your Spring project.
+2. Run the Spring Boot app, then open the **SB Tools** window in IntelliJ.
+3. Press **Connect** → run snippets with `Ctrl+Enter`.
+4. Manage your REST calls in the HTTP tab (endpoint, JSON body, headers). Play → response in the console; insert the generated `httpReq.perform(caseId)` snippet if you want to call the same request from Java.
 
 ## Highlighted plugin features
 - Tool window with console + editor, syntax highlighting, Ctrl+Enter execution.
@@ -73,7 +73,7 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
 - Command history with toolbar navigation + popup, plus persistent history across IDE restarts.
 - Snapshots tab (save/load/pin/delete, JSON import) + Loaded Variables panel + new Import Aliases panel that expands custom aliases before execution.
 - Automatic Spring context injection (`applicationContext` variable) once the agent is bound.
-- Attach action that remembers the local agent path or resolves it from Maven local.
+- Single-click **Connect** action that attaches to the JVM, loads the agent, and binds the Spring context.
 
 ## Dev runtime capabilities
 - Small nREPL server that interprets both Java snippets and special ops (bind-spring, snapshot-*, class-reload, etc.).
