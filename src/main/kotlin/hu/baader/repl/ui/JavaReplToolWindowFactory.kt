@@ -47,6 +47,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         val consoleImpl = ConsoleViewImpl(project, true)
         val console: ConsoleView = consoleImpl
         Disposer.register(toolWindow.disposable, console)
+        consoleImpl.editor?.let { it.settings.isUseSoftWraps = true }
 
         val codeSnippetContentType = ConsoleViewContentType(
             "REPL_CODE_SNIPPET",
@@ -158,13 +159,14 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 return
             }
             ApplicationManager.getApplication().invokeLater {
-                val popup = JBPopupFactory.getInstance()
-                    .createPopupChooserBuilder(items)
-                    .setTitle("Insert Spring Bean Getter")
-                    .setNamerForFiltering { "${it.name} ${it.className}" }
-                    .setRenderer(object : SimpleListCellRenderer<NreplService.BeanInfo>() {
+                val allItems = items.toList()
+                val listModel = javax.swing.DefaultListModel<NreplService.BeanInfo>().apply {
+                    allItems.forEach { addElement(it) }
+                }
+                val list = JList(listModel).apply {
+                    cellRenderer = object : SimpleListCellRenderer<NreplService.BeanInfo>() {
                         override fun customize(
-                            list: JList<out NreplService.BeanInfo>,
+                            l: JList<out NreplService.BeanInfo>,
                             value: NreplService.BeanInfo?,
                             index: Int,
                             selected: Boolean,
@@ -174,10 +176,72 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                                 if (it.className.isBlank()) it.name else "${it.name} — ${it.className}"
                             } ?: ""
                         }
-                    })
-                    .setItemChosenCallback { bean -> insertBeanSnippet(bean) }
+                    }
+                }
+                val searchField = javax.swing.JTextField()
+                val panel = javax.swing.JPanel(java.awt.BorderLayout()).apply {
+                    border = javax.swing.BorderFactory.createEmptyBorder(4, 4, 4, 4)
+                    add(searchField, java.awt.BorderLayout.NORTH)
+                    add(JBScrollPane(list), java.awt.BorderLayout.CENTER)
+                }
+
+                fun applyFilter() {
+                    val query = searchField.text.trim().lowercase()
+                    listModel.clear()
+                    if (query.isEmpty()) {
+                        allItems.forEach { listModel.addElement(it) }
+                    } else {
+                        allItems.filter {
+                            it.name.lowercase().contains(query) ||
+                                it.className.lowercase().contains(query)
+                        }.forEach { listModel.addElement(it) }
+                    }
+                    if (!listModel.isEmpty) {
+                        list.selectedIndex = 0
+                    }
+                }
+
+                searchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                    override fun insertUpdate(e: javax.swing.event.DocumentEvent?) = applyFilter()
+                    override fun removeUpdate(e: javax.swing.event.DocumentEvent?) = applyFilter()
+                    override fun changedUpdate(e: javax.swing.event.DocumentEvent?) = applyFilter()
+                })
+
+                fun chooseSelected(popup: com.intellij.openapi.ui.popup.JBPopup) {
+                    val bean = list.selectedValue ?: return
+                    insertBeanSnippet(bean)
+                    popup.closeOk(null)
+                }
+
+                val popup = JBPopupFactory.getInstance()
+                    .createComponentPopupBuilder(panel, searchField)
+                    .setTitle("Insert Spring Bean Getter")
+                    .setResizable(true)
+                    .setMovable(true)
+                    .setRequestFocus(true)
+                    .setCancelOnClickOutside(true)
                     .createPopup()
+
+                val width = editor.component.width.coerceAtLeast(400)
+                val height = (editor.component.height * 0.5).toInt().coerceAtLeast(200)
+                popup.setSize(java.awt.Dimension(width, height))
+
+                list.addMouseListener(object : java.awt.event.MouseAdapter() {
+                    override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                        if (e.clickCount == 2 && list.selectedValue != null) {
+                            chooseSelected(popup)
+                        }
+                    }
+                })
+                searchField.addActionListener {
+                    if (!listModel.isEmpty) {
+                        chooseSelected(popup)
+                    }
+                }
+
+                applyFilter()
                 popup.showInBestPositionFor(editor)
+                searchField.requestFocusInWindow()
             }
         }
 
@@ -200,7 +264,13 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             }
             val value = msg["value"]
             if (value != null) {
-                console.print("=> $value\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                val formatted = prettyPrintJsonIfLikely(value) ?: value
+                if (formatted.contains('\n')) {
+                    console.print("=>\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    console.print(formatted + "\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                } else {
+                    console.print("=> $formatted\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                }
             }
             val err = msg["err"]
             if (err != null) {
@@ -284,12 +354,41 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             override fun actionPerformed(e: AnActionEvent) {
                 val projectRef = e.project ?: project
                 val documentRef = editor.document
+                val selectionModel = editor.selectionModel
+                val selectedText = selectionModel.selectedText
+                val rangeStart = selectionModel.selectionStart
+                val rangeEnd = selectionModel.selectionEnd
+                val originalSnippet = (selectedText ?: documentRef.text) ?: return
+                if (originalSnippet.isBlank()) return
+
                 WriteCommandAction.runWriteCommandAction(projectRef) {
                     try {
+                        val wrapped = buildString {
+                            append("class ReplWrapper {\n")
+                            append("  void run() {\n")
+                            append(originalSnippet)
+                            if (!originalSnippet.endsWith("\n")) append("\n")
+                            append("  }\n")
+                            append("}\n")
+                        }
+
                         val psiFile = PsiFileFactory.getInstance(projectRef)
-                            .createFileFromText("ReplSnippet.java", JavaFileType.INSTANCE, documentRef.text)
+                            .createFileFromText("ReplWrapper.java", JavaFileType.INSTANCE, wrapped)
                         CodeStyleManager.getInstance(projectRef).reformat(psiFile)
-                        documentRef.setText(psiFile.text)
+
+                        val psiClass = psiFile.children.firstOrNull { it is com.intellij.psi.PsiClass } as? com.intellij.psi.PsiClass
+                        val runMethod = psiClass?.methods?.firstOrNull { it.name == "run" }
+                        val body = runMethod?.body
+                        val formattedBody = body?.statements
+                            ?.joinToString(separator = "\n") { it.text }
+                            ?.trimEnd()
+                            ?: originalSnippet
+
+                        if (!selectedText.isNullOrEmpty()) {
+                            documentRef.replaceString(rangeStart, rangeEnd, formattedBody)
+                        } else {
+                            documentRef.setText(formattedBody)
+                        }
                     } catch (ex: Exception) {
                         console.print("Format failed: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
                     }
@@ -602,5 +701,106 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         )
         val httpContent = ContentFactory.getInstance().createContent(httpPanel, "HTTP", false)
         toolWindow.contentManager.addContent(httpContent)
+
+        // Enable soft wraps in console editor on EDT once the UI is ready
+        ApplicationManager.getApplication().invokeLater {
+            consoleImpl.editor?.settings?.isUseSoftWraps = true
+        }
+    }
+
+    private fun prettyPrintJsonIfLikely(raw: String?): String? {
+        val original = raw?.trim() ?: return null
+        if (original.length < 2) return null
+
+        // If value is a quoted JSON string, strip outer quotes and unescape basic sequences
+        val s = if (original.first() == '"' && original.last() == '"') {
+            val inner = original.substring(1, original.length - 1)
+            buildString {
+                var escape = false
+                for (ch in inner) {
+                    if (escape) {
+                        when (ch) {
+                            '\\' -> append('\\')
+                            '"' -> append('"')
+                            'n' -> append('\n')
+                            'r' -> append('\r')
+                            't' -> append('\t')
+                            else -> append(ch)
+                        }
+                        escape = false
+                    } else if (ch == '\\') {
+                        escape = true
+                    } else {
+                        append(ch)
+                    }
+                }
+            }.trim()
+        } else {
+            original
+        }
+
+        if (s.length < 2) return null
+        val first = s.first()
+        val last = s.last()
+        if (!((first == '{' && last == '}') || (first == '[' && last == ']'))) return null
+        // Heuristic: must look like real JSON (have ':' or quoted strings)
+        if (!s.contains(':') && !s.contains('"')) return null
+
+        val sb = StringBuilder()
+        var indent = 0
+        var inString = false
+        var escape = false
+
+        fun appendIndent() {
+            repeat(indent) { sb.append("  ") }
+        }
+
+        for (ch in s) {
+            when {
+                inString -> {
+                    sb.append(ch)
+                    if (escape) {
+                        escape = false
+                    } else if (ch == '\\') {
+                        escape = true
+                    } else if (ch == '"') {
+                        inString = false
+                    }
+                }
+                ch == '"' -> {
+                    inString = true
+                    sb.append(ch)
+                }
+                ch == '{' || ch == '[' -> {
+                    sb.append(ch)
+                    sb.append('\n')
+                    indent++
+                    appendIndent()
+                }
+                ch == '}' || ch == ']' -> {
+                    sb.append('\n')
+                    indent--
+                    if (indent < 0) indent = 0
+                    appendIndent()
+                    sb.append(ch)
+                }
+                ch == ',' -> {
+                    sb.append(ch)
+                    sb.append('\n')
+                    appendIndent()
+                }
+                ch == ':' -> {
+                    sb.append(": ")
+                }
+                ch.isWhitespace() -> {
+                    // skip
+                }
+                else -> {
+                    sb.append(ch)
+                }
+            }
+        }
+
+        return sb.toString()
     }
 }

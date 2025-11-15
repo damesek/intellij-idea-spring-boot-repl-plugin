@@ -10,13 +10,13 @@
 
    A JAR-ok a `sb-repl-bridge/target` és `sb-repl-agent/target` alatt jelennek meg, és bekerülnek a `~/.m2/repository/hu/baader/...` könyvtárba.
 
-2. Wire the Spring application (0.7.1):
+2. Wire the Spring application (0.7.2):
 
    ```xml
    <dependency>
        <groupId>hu.baader</groupId>
        <artifactId>sb-repl-bridge</artifactId>
-       <version>0.7.1</version>
+       <version>0.7.2</version>
    </dependency>
    ```
 
@@ -28,4 +28,4 @@
 
    Telepítés: IntelliJ → Settings → Plugins → Install from Disk, válaszd a `build/distributions/sb-repl-*.zip` fájlt, majd restart.
 
-4. Indítsd el a Spring Boot appot, nyisd meg az SB Tools tool windowot, és nyomd meg a Connect gombot.
+4. Indítsd el a Spring Boot appot, nyisd meg a Spring Boot REPL tool windowot, és nyomd meg a Connect gombot.

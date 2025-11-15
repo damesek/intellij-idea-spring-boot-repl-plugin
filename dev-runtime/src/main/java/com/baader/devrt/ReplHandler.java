@@ -25,6 +25,7 @@ public class ReplHandler {
             case ReplOps.SESSION_RESET -> handleResetSession();
             case ReplOps.BIND_SPRING -> handleBindSpring(message);
             case ReplOps.CLASS_RELOAD -> handleClassReload(message);
+            case ReplOps.LIST_BEANS -> handleListBeans();
             // Snapshot ops can be added here later
             default -> Map.of("status", "error", "message", "Unknown op: " + op);
         };
@@ -79,6 +80,50 @@ public class ReplHandler {
             return Map.of("status", "error", "message", res.message != null ? res.message : "HotSwap failed");
         }
         return Map.of("value", res.message != null ? res.message : "HotSwap completed");
+    }
+
+    private Map<String, Object> handleListBeans() {
+        Object ctx = ReplBindings.applicationContext();
+        if (ctx == null) {
+            ctx = SpringContextHolder.get();
+        }
+        if (ctx == null) {
+            return Map.of("status", "error", "err", "No ApplicationContext bound in dev-runtime");
+        }
+        try {
+            // Avoid hard failure if Spring is not on the classpath
+            Class<?> appCtxClass = Class.forName("org.springframework.context.ApplicationContext");
+            if (!appCtxClass.isInstance(ctx)) {
+                return Map.of("status", "error", "err", "Bound context is not a Spring ApplicationContext");
+            }
+            Object appCtx = appCtxClass.cast(ctx);
+            // getBeanDefinitionNames()
+            String[] names;
+            try {
+                java.lang.reflect.Method getNames = appCtxClass.getMethod("getBeanDefinitionNames");
+                Object res = getNames.invoke(appCtx);
+                names = (String[]) res;
+            } catch (Throwable t) {
+                return Map.of("status", "error", "err", "Cannot list beans via ApplicationContext: " + t);
+            }
+            java.util.Arrays.sort(names);
+            StringBuilder sb = new StringBuilder();
+            for (String name : names) {
+                if (name == null || name.isEmpty()) continue;
+                String className = "";
+                try {
+                    java.lang.reflect.Method getBean = appCtxClass.getMethod("getBean", String.class);
+                    Object bean = getBean.invoke(appCtx, name);
+                    if (bean != null) {
+                        className = bean.getClass().getName();
+                    }
+                } catch (Throwable ignored) {}
+                sb.append(name).append('\t').append(className).append('\n');
+            }
+            return Map.of("value", sb.toString());
+        } catch (Throwable t) {
+            return Map.of("status", "error", "err", t.toString());
+        }
     }
 
     private Map<String, Object> handleBindSpring(Map<String, String> msg) {

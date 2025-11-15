@@ -53,7 +53,7 @@ class RunEditorSelectionAction : AnAction("Run Selection") {
     
     private fun showNotification(project: Project, message: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("SB Tools")
+            .getNotificationGroup("Spring Boot REPL")
             .createNotification(message, type)
             .notify(project)
     }

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.7.0"
+version = "0.7.2"
 
 repositories {
     mavenCentral()
@@ -36,19 +36,21 @@ java {
 
 intellijPlatform {
     pluginConfiguration {
-        name = "Java over nREPL"
+        name = "Spring Boot REPL"
         id = "hu.baader.java-over-nrepl"
-        version = "0.7.0"
+        version = "0.7.2"
         vendor {
             name = "Baader"
         }
         description = """
-            Execute Java code through nREPL in IntelliJ IDEA.
+            Spring Boot REPL for IntelliJ IDEA.
             Features:
-            - Connect to nREPL server
-            - Execute Java code snippets
-            - Persistent settings
-            - Tool window with REPL interface
+            - Attach a lightweight dev-runtime agent to a running Spring Boot JVM
+            - JShell-based Java REPL with stateful imports and variables
+            - Automatic Spring context binding and ctx helper
+            - Hot-swap support for editing and reloading classes
+            - Editor actions for Run Selection, Evaluate at Caret, Reload Class, Sync Imports
+            - Optional HTTP panel for managing and replaying REST calls
         """.trimIndent()
 
         ideaVersion {

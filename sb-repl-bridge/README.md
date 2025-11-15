@@ -8,7 +8,7 @@ Spring Boot auto-configuration that exposes the currently running `ApplicationCo
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
 </dependency>
 ```
 
@@ -16,7 +16,7 @@ Gradle (Kotlin):
 
 ```kotlin
 dependencies {
-    implementation("hu.baader:sb-repl-bridge:0.7.1")
+    implementation("hu.baader:sb-repl-bridge:0.7.2")
 }
 ```
 
@@ -30,7 +30,7 @@ dependencies {
 
 1. Add the dependency to your Spring Boot application.
 2. Start the app normally (no extra configuration required).
-3. In IntelliJ, open **SB Tools** and hit the single **Connect** button (attaches, loads the agent, and binds Spring context in one go).
+3. In IntelliJ, open the **Spring Boot REPL** tool window and hit the single **Connect** button (attaches, loads the agent, and binds Spring context in one go).
 4. The REPL now exposes `applicationContext` immediately; bean lookups and helper buttons (Insert Bean Getter) work without extra reflection hacks.
 
 ## 🔧 Configuration Options

@@ -44,7 +44,7 @@ class SyncImportsFromEditorAction : AnAction("Sync Imports") {
                 onResult = {
                     notify(
                         project,
-                        "Synced ${imports.size} imports to SB Tools",
+                        "Synced ${imports.size} imports to Spring Boot REPL",
                         NotificationType.INFORMATION
                     )
                 },
@@ -65,7 +65,7 @@ class SyncImportsFromEditorAction : AnAction("Sync Imports") {
 
     private fun notify(project: Project, message: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("SB Tools")
+            .getNotificationGroup("Spring Boot REPL")
             .createNotification(message, type)
             .notify(project)
     }

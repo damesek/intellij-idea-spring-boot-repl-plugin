@@ -1,19 +1,30 @@
 <idea-plugin>
     <id>hu.baader.java-over-nrepl</id>
-    <name>Java over nREPL</name>
+    <name>Spring Boot REPL</name>
     <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
     
     <description><![CDATA[
-      Execute Java code through nREPL in IntelliJ IDEA.
+      Spring Boot REPL for IntelliJ IDEA.<br/>
+      Evaluate Java code against a live Spring Boot application, with automatic context binding and hot-reload support.
       <br/><br/>
-      Features:
+      <b>Features</b>
       <ul>
-        <li>Connect to nREPL server with Java middleware</li>
-        <li>Execute Java code snippets</li>
-        <li>Persistent settings (host, port, auto-connect)</li>
-        <li>Tool window with REPL interface</li>
-        <li>Run selection from editor</li>
+        <li>Attach a lightweight dev-runtime agent to a running Spring Boot JVM</li>
+        <li>JShell-based Java REPL with stateful imports and variables</li>
+        <li>Automatic Spring context binding and a pre-initialized <code>ctx</code> (ApplicationContext) helper</li>
+        <li>Hot-swap support for editing and reloading classes on the fly</li>
+        <li>Editor actions: Run Selection, Evaluate at Caret, Reload Class, Sync Imports</li>
+        <li>Optional HTTP panel for managing and replaying REST calls</li>
       </ul>
+      <br/>
+      <b>Quick usage</b>
+      <ol>
+        <li>Add <code>sb-repl-bridge</code> and <code>sb-repl-agent</code> (or the dev-runtime agent JAR) to your Spring Boot project.</li>
+        <li>Start the application and attach the agent (via JVM <code>-javaagent</code> option or the plugin's Attach action).</li>
+        <li>Open the <b>Spring Boot REPL</b> tool window and press <b>Connect</b>; the plugin auto-binds the Spring context and initializes <code>ctx</code>.</li>
+        <li>Run snippets such as <code>((com.example.AIService) ctx.getBean(com.example.AIService.class)).generateResponse("Hello")</code> directly against the live app.</li>
+        <li>Use the editor Spring Boot REPL menu (Run Selection, Evaluate at Caret, Reload Class, Sync Imports) to drive the REPL from your source files.</li>
+      </ol>
     ]]></description>
     
     <depends>com.intellij.modules.platform</depends>
@@ -21,7 +32,7 @@
     
     <extensions defaultExtensionNs="com.intellij">
         <!-- Tool Window -->
-        <toolWindow id="SB Tools"
+        <toolWindow id="Spring Boot REPL"
                     factoryClass="hu.baader.repl.ui.JavaReplToolWindowFactory"
                     anchor="bottom"/>
 
@@ -29,13 +40,13 @@
         <applicationConfigurable
                 instance="hu.baader.repl.settings.PluginSettingsConfigurable"
                 id="hu.baader.repl.settings"
-                displayName="Java over nREPL"/>
+                displayName="Spring Boot REPL"/>
 
         <!-- Project startup -->
         <postStartupActivity implementation="hu.baader.repl.nrepl.ProjectStartup"/>
 
         <!-- Notification Group -->
-        <notificationGroup id="SB Tools"
+        <notificationGroup id="Spring Boot REPL"
                           displayType="BALLOON"/>
 
         <!-- Project Service for HTTP request cases -->
@@ -43,9 +54,9 @@
     </extensions>
     
     <actions>
-        <!-- Spring REPL group in Code menu + editor popup -->
+        <!-- Spring Boot REPL group in Code menu + editor popup -->
         <group id="hu.baader.repl.SpringReplGroup"
-               text="Spring REPL"
+               text="Spring Boot REPL"
                popup="true">
             <add-to-group group-id="CodeMenu" anchor="last"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>

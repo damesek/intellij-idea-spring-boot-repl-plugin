@@ -14,6 +14,7 @@ public final class ReplOps {
     public static final String JAVA_EVAL = "java-eval";
     public static final String BIND_SPRING = "bind-spring";
     public static final String CLASS_RELOAD = "class-reload";
+    public static final String LIST_BEANS = "list-beans";
 
     private ReplOps() {}
 }

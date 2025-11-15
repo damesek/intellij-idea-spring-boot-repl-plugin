@@ -1,7 +1,7 @@
 # Java over nREPL — IntelliJ IDEA Plugin
 
-[![Maven Central – sb-repl-bridge 0.7.1](https://img.shields.io/badge/sb--repl--bridge-0.7.1-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.1)
-[![Maven Central – sb-repl-agent 0.7.1](https://img.shields.io/badge/sb--repl--agent-0.7.1-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.1)
+[![Maven Central – sb-repl-bridge 0.7.2](https://img.shields.io/badge/sb--repl--bridge-0.7.2-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.2)
+[![Maven Central – sb-repl-agent 0.7.2](https://img.shields.io/badge/sb--repl--agent-0.7.2-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.2)
 
 All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA while talking to a live Spring Boot application.
 
@@ -11,19 +11,19 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
 - `sb-repl-bridge/` – Spring Boot auto-config, ami betolja az `ApplicationContext`-et az agentbe.
 - `sb-repl-agent/` – Mavenes agent csomag, ugyanarra a dev-runtime kódra építve.
 
-## Spring Boot integráció (0.7.1)
+## Spring Boot integráció (0.7.2)
 `pom.xml`:
 
 ```xml
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
 </dependency>
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-agent</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
 </dependency>
 ```
 
@@ -48,17 +48,17 @@ Indítsd el az alkalmazást `dev` profillal, a bridge automatikusan regisztrálj
 ./gradlew :dev-runtime:jar
 ```
 
-Ez létrehozza a `dev-runtime/build/libs/dev-runtime-agent-0.7.0.jar` fájlt.
+Ez létrehozza a `dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar` fájlt.
 
 ### 2/a. Indítás javaagent-tel (közvetlen)
 
 ```bash
 java \
-  -javaagent:/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.0.jar=port=5557 \
+  -javaagent:/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar=port=5557 \
   -jar your-app.jar
 ```
 
-### 2/b. sb-repl-agent 0.7.1 Mavenből
+### 2/b. sb-repl-agent 0.7.2 Mavenből
 
 Miután lefuttattad:
 
@@ -67,15 +67,15 @@ mvn -f sb-repl-bridge/pom.xml clean install -Dgpg.skip=true
 mvn -f sb-repl-agent/pom.xml  clean install -Dgpg.skip=true
 ```
 
-az IDE plugin a `~/.m2/repository/hu/baader/sb-repl-agent/0.7.1/...` alól is fel tudja venni az agentet.
+az IDE plugin a `~/.m2/repository/hu/baader/sb-repl-agent/0.7.2/...` alól is fel tudja venni az agentet.
 
-## Plugin build és telepítés (0.7.0)
+## Plugin build és telepítés (0.7.2)
 
 ```bash
 ./gradlew buildPlugin
 ```
 
-Telepítés IntelliJ-ben: `Settings → Plugins → Install from Disk`, válaszd a `build/distributions/sb-repl-0.7.0.zip` fájlt, majd restart.
+Telepítés IntelliJ-ben: `Settings → Plugins → Install from Disk`, válaszd a `build/distributions/sb-repl-0.7.2.zip` fájlt, majd restart.
 
 ## Plugin konfigurálása
 
@@ -84,14 +84,14 @@ Telepítés IntelliJ-ben: `Settings → Plugins → Install from Disk`, válaszd
 - `Host`: `127.0.0.1`
 - `Port`: `5557`
 - `Agent JAR path`:
-  - üresen hagyható, ha `sb-repl-agent 0.7.1` Mavenből elérhető (`~/.m2`),
+  - üresen hagyható, ha `sb-repl-agent 0.7.2` Mavenből elérhető (`~/.m2`),
   - vagy add meg a dev-runtime JAR-t:
-    - `/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.0.jar`
+    - `/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar`
 
 Mentés után:
 
 1. Indítsd el a Spring Boot appot.
-2. Nyisd meg az **SB Tools** tool windowot.
+2. Nyisd meg a **Spring Boot REPL** tool windowot.
 3. Nyomd meg a **Connect** gombot.
 
 Ha a dev-runtime agent fut, a konzolban ezt látod:
@@ -134,6 +134,6 @@ logger.info("✅ AI service is available");
 
 - Nyisd meg a módosított osztályt (pl. `AIService`).
 - Jelöld ki a teljes osztályt vagy az egész fájlt.
-- SB Tools ablakban nyomd meg a **Hot Swap** gombot, vagy használd a `Reload Class in SB Tools` menüpontot (Cmd+Shift+R).
+- A Spring Boot REPL ablakban nyomd meg a **Hot Swap** gombot, vagy használd a `Reload Class` menüpontot (Spring Boot REPL → Reload Class, Cmd+Shift+R).
 
 Sikeres hot swap esetén a konzolban „Reloaded classes: ...” jellegű üzenet jelenik meg, és a következő REPL hívás már az új kódot futtatja.

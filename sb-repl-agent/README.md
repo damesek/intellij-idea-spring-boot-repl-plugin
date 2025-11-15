@@ -8,7 +8,7 @@ Maven-distributed JVM agent that powers the sb-repl IntelliJ plugin. Attach it t
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-agent</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
 </dependency>
 ```
 
@@ -19,7 +19,7 @@ After publishing to Sonatype Central, the IDE plugin can resolve the JAR from th
 * **Attach to running process**: the IntelliJ plugin's single **Connect** action looks up `~/.m2/repository/hu/baader/sb-repl-agent/.../sb-repl-agent-...jar` automatically.
 * **Start with agent**:
   ```bash
-  java -javaagent:sb-repl-agent-0.7.1.jar=port=5557 -jar your-app.jar
+  java -javaagent:sb-repl-agent-0.7.2.jar=port=5557 -jar your-app.jar
   ```
   Optional args: `port`, `token`, future switches pass straight through the manifest.
 
