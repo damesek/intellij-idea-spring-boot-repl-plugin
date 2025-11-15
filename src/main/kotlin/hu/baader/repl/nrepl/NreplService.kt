@@ -18,6 +18,8 @@ class NreplService(private val project: Project) {
     private val supportsJshell = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val listeners = mutableListOf<(Map<String, String>) -> Unit>()
+    @Volatile private var lastEvalSnippet: String? = null
+    @Volatile private var debugSink: ((String) -> Unit)? = null
 
     fun onMessage(listener: (Map<String, String>) -> Unit): Disposable {
         listeners += listener
@@ -34,6 +36,7 @@ class NreplService(private val project: Project) {
 
         val c = NreplClient(settings.host, settings.port)
         c.onMessage { msg ->
+            debugSink?.invoke("[nREPL] $msg")
             listeners.forEach { it(msg) }
         }
 
@@ -70,9 +73,24 @@ class NreplService(private val project: Project) {
         connectAsync()
     }
 
+    fun setDebugSink(sink: ((String) -> Unit)?) {
+        debugSink = sink
+    }
+
+    fun debugLog(message: String) {
+        debugSink?.invoke(message)
+    }
+
     fun eval(code: String) {
         val c = client ?: throw IllegalStateException("Not connected to nREPL")
+        lastEvalSnippet = code
         c.eval(code)
+    }
+
+    fun consumeLastEvalSnippet(): String? {
+        val s = lastEvalSnippet
+        lastEvalSnippet = null
+        return s
     }
 
     // Session ops

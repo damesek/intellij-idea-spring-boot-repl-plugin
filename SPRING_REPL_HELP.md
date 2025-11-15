@@ -1,150 +1,170 @@
-# Spring Boot REPL Használati Útmutató
+# Spring Boot REPL – Usage Guide
 
-## 🚀 Gyors Start
+This guide explains how to use the **Spring Boot REPL** IntelliJ plugin with a running Spring Boot application, and how the REPL transcript, snapshots and helpers fit together.
 
-### 1. Alkalmazás indítása
+---
+
+## 1. Quick Start
+
+### 1.1 Start your Spring Boot application
+
+Run your app with the dev-runtime agent attached (see `README.md` for full details), for example:
+
 ```bash
-cd ~/Documents/Codes/vernyomas-app
-mvn -DskipTests -Dspring-boot.run.jvmArguments="-Dspring.liveBeansView.mbeanDomain=devrepl" spring-boot:run
+./gradlew :dev-runtime:jar
+java \
+  -javaagent:/path/to/dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar=port=5557 \
+  -jar your-app.jar
 ```
 
-### 2. REPL indítása és kapcsolódás
+You should see in the application logs that the agent started and the nREPL server is listening on the configured port (default: `5557`).
+
+### 1.2 Start IntelliJ IDEA with the plugin
+
+- Either run the sandbox IDE from this repo:
+
 ```bash
-cd ~/Documents/Codes/sb-repl
 ./gradlew runIde
 ```
 
-1. Java REPL tool window megnyitása
-2. **Attach & Inject Dev Runtime** gomb
-3. Válaszd ki a vernyomas-app JVM-et
-4. **Bind Spring Context** gomb → beírod: `hu.vernyomas.app.AppCtxHolder.get()`
+- Or install the built plugin ZIP (`sb-repl-0.7.2.zip`) into your main IDE.
 
-## ⚠️ Fontos: Spring Bean-ek Használata
+Then open the **Spring Boot REPL** tool window.
 
-### Megoldás a ClassLoader problémára
-**Ha ClassCastException-t kapsz**, akkor a Spring Boot DevTools okozza a problémát.
-- **Megoldás**: Kapcsold ki a DevTools-t a `pom.xml`-ben (comment-eld ki a spring-boot-devtools dependency-t)
+### 1.3 Configure and connect
 
-### ✅ Két működő megoldás
+In IntelliJ:
 
-#### 1. Reflection (MINDIG működik - DevTools-szal is)
+1. Open `Settings → Tools → Spring Boot REPL`.
+2. Set **Host** to `127.0.0.1` and **Port** to the nREPL port (e.g. `5557`).
+3. Optionally set an **Agent JAR** path if it is not resolved from Maven.
+4. Apply settings.
 
-**Paraméter nélküli metódus:**
+In the Spring Boot REPL tool window:
+
+1. Click **Connect** to connect to the running nREPL / dev-runtime agent.
+2. Once connected, click **Bind Spring Context** if your setup requires explicit binding.
+3. The log should show that JShell mode is active and the Spring context is bound.
+
+---
+
+## 2. REPL UI and Transcript
+
+The **REPL** tab has two main areas:
+
+- **Bottom** – Java editor (JShell-backed):
+  - Write Java snippets here.
+  - Run with **Execute** (button) or **Ctrl+Enter**.
+  - Stateful: imports, variables and definitions are kept across evaluations.
+
+- **Top** – Transcript (read-only):
+  - Every evaluation becomes a block:
+    - `>>` – the code that was executed (input snippet).
+    - `=>` – the formatted result (value or error).
+  - Blocks are foldable; the most recent ones stay expanded.
+  - Input snippet has a subtle background so it stands out from the result.
+
+Additional helpers:
+
+- **Last Result** popup – shows the last returned value in a dedicated read-only editor:
+  - JSON is pretty-printed and syntax-highlighted when possible.
+  - Long responses are wrapped for readability.
+- **Log** popup – shows the full console (out/err, JShell/nREPL messages, errors).
+
+Evaluations reach the transcript in two ways:
+
+- From the REPL editor (**Execute / Ctrl+Enter**).
+- From a Java file via **Evaluate at Caret** (SB Tools / context menu).
+
+Both modes send the snippet through the same path, so every evaluation appears as a block in the transcript.
+
+---
+
+## 3. Working with Spring Beans
+
+The recommended pattern is:
+
+1. Expose the Spring `ApplicationContext` to the agent via the bridge (`sb-repl-bridge` + `SpringContextHolder`), as described in `README.md`.
+2. From the REPL, obtain the context and call your beans.
+
+Example:
+
 ```java
-var service = applicationContext.getBean("bloodPressureService");
+import com.baader.devrt.SpringContextHolder;
+import org.springframework.context.ApplicationContext;
+
+ApplicationContext ctx = (ApplicationContext) SpringContextHolder.get();
+var service = ctx.getBean("bloodPressureService");
+```
+
+### 3.1 Using reflection (safe with DevTools)
+
+Reflection works even if Spring Boot DevTools or multiple classloaders are in play:
+
+```java
+var service = ctx.getBean("bloodPressureService");
 return service.getClass().getMethod("getStatistics").invoke(service);
 ```
 
-**Paraméteres metódus:**
+With parameters:
+
 ```java
-var service = applicationContext.getBean("bloodPressureService");
+var service = ctx.getBean("bloodPressureService");
 var method = service.getClass().getMethod("getRecentReadings", int.class);
 return method.invoke(service, 10);
 ```
 
-#### 2. Direct Cast (DevTools NÉLKÜL működik)
+### 3.2 Direct casts (when DevTools is disabled)
 
-**Ha nincs DevTools a projektben:**
+If DevTools is not on the classpath and you share the same classloader:
+
 ```java
-var service = (hu.vernyomas.app.service.BloodPressureService) applicationContext.getBean("bloodPressureService");
+var service = (hu.vernyomas.app.service.BloodPressureService)
+        ctx.getBean("bloodPressureService");
 return service.getStatistics();
 ```
 
-**Vagy típussal:**
+Or with typed `getBean`:
+
 ```java
-var service = applicationContext.getBean("bloodPressureService", hu.vernyomas.app.service.BloodPressureService.class);
+var service = ctx.getBean(
+        "bloodPressureService",
+        hu.vernyomas.app.service.BloodPressureService.class
+);
 return service.getStatistics();
 ```
 
-## 📊 Hasznos Példák
+### 3.3 Insert Bean Getter helper
 
-## ♻️ HotSwap módosított osztályok
+The **Insert Bean Getter** action in the REPL toolbar:
 
-1. Illeszd be a **teljes osztálykódot** (package + class) a REPL szerkesztőbe
-2. Jelöld ki a kódot (vagy hagyd az egész fájlt kijelöletlenül), majd kattints a **Hot Swap** gombra
-3. Az agent lefordítja a forrást, és `Instrumentation.redefineClasses` segítségével **újratölti a futó JVM-ben**
+- Fetches the list of Spring beans from the running app.
+- Shows a searchable popup (by bean name and type).
+- Inserts a snippet like:
 
-> Tipp: csak olyan osztály működik, amit a JVM már betöltött. Ha "class not loaded" hiba jön, futtasd le a szolgáltatást a régi kóddal (hogy ténylegesen betöltődjön), majd próbáld újra a Hot Swap-et.
-
-## 🫘 Bean Getter gyors beszúrás
-
-- A **Insert Bean Getter** (szerviz ikon) gombra kattintva a REPL lekéri az aktuális Spring bean listát
-- Gépelj rá a bean nevére vagy típusára, enter → automatikusan beszúrja a `var myService = applicationContext.getBean(FooService.class);` sort a kurzorhoz
-- A gomb csak akkor aktív, ha a Spring context már be van bind-olva
-
-### Repository használat
 ```java
-// Repository metódus hívása reflection-nel
-var repo = applicationContext.getBean("bloodPressureRepository");
-return repo.getClass().getMethod("findAll").invoke(repo);
+var myService = ctx.getBean(FooService.class);
 ```
 
-### Service használat - statisztikák
-```java
-// Service metódus hívása
-var service = applicationContext.getBean("bloodPressureService");
-return service.getClass().getMethod("getStatistics").invoke(service);
-```
+The action is only enabled when the Spring context is bound.
 
-### Mai mérések
-```java
-var service = applicationContext.getBean("bloodPressureService");
-return service.getClass().getMethod("getTodayReadings").invoke(service);
-```
+---
 
-### Legutóbbi N mérés
-```java
-var service = applicationContext.getBean("bloodPressureService");
-var method = service.getClass().getMethod("getRecentReadings", int.class);
-return method.invoke(service, 5);  // Utolsó 5 mérés
-```
+## 4. Snapshots
 
-### Új mérés hozzáadása
-```java
-// Entity létrehozása - ez működik, mert új objektum
-var reading = new hu.vernyomas.app.entity.BloodPressureReading();
-reading.setSystole(125);
-reading.setDiastole(82);
-reading.setPulse(72);
-reading.setMeasuredAt(java.time.LocalDateTime.now());
-reading.setNotes("REPL tesztből");
+The **Snapshots** tab lets you persist and reload values from the REPL.
 
-// Repository save metódus hívása reflection-nel
-var repo = applicationContext.getBean("bloodPressureRepository");
-var saveMethod = repo.getClass().getMethod("save", Object.class);
-return saveMethod.invoke(repo, reading);
-```
+### 4.1 Saving a snapshot
 
-### Bean-ek listázása
-```java
-// Összes bean név
-return java.util.Arrays.asList(applicationContext.getBeanDefinitionNames());
-```
+1. Run some code in the REPL that produces a value.
+2. Switch to **Snapshots**.
+3. Click **Save**, choose a name (e.g. `stats1`).
 
-### Repository-k keresése
-```java
-// Összes repository bean
-var repos = applicationContext.getBeansOfType(org.springframework.data.repository.Repository.class);
-return repos.keySet();
-```
+### 4.2 Loading a snapshot back into the REPL
 
-### Service-ek keresése
-```java
-// Összes @Service annotált bean
-var services = applicationContext.getBeansWithAnnotation(org.springframework.stereotype.Service.class);
-return services.keySet();
-```
+1. In **Snapshots**, select the entry and click **Load**.
+2. A Java snippet is inserted into the REPL editor, typically using `SnapshotStore`:
 
-## 💾 Snapshot használat
-
-### Mentés
-1. Futtasd le a kódot
-2. **Snapshots** fül → **Save** gomb
-3. Adj nevet (pl. `stats1`)
-
-### Betöltés
-1. **Snapshots** fül → válaszd ki → **Load**
-2. Ez beszúrja:
 ```java
 Object stats1;
 try {
@@ -158,43 +178,62 @@ try {
 return stats1;
 ```
 
-### JSON Import
-1. **Import JSON** gomb
-2. Illeszd be a JSON-t
-3. Add meg a típust: `hu.vernyomas.app.entity.BloodPressureReading`
-4. Adj nevet
+You can then edit or extend this snippet before running it.
 
-## 🔧 Debug Tippek
+### 4.3 Importing JSON
 
-### Ha "cannot find symbol" hibát kapsz
-- Ellenőrizd, hogy cast-oltad-e a bean-t
-- Használj teljes osztálynevet (package-gel együtt)
+1. Click **Import JSON** in the Snapshots tab.
+2. Paste a JSON document.
+3. Provide a target type, for example:
 
-### Ha "false" értéket kapsz a Bind Spring Context-nél
-- Ellenőrizd az AppCtxHolder.get() kifejezést
-- Győződj meg róla, hogy az alkalmazás fut
-
-### Ha nem találja a bean-t
-```java
-// Ellenőrizd, hogy létezik-e
-return applicationContext.containsBean("bloodPressureService");
-
-// Listázd az összes bean-t
-return java.util.Arrays.asList(applicationContext.getBeanDefinitionNames());
+```text
+hu.vernyomas.app.entity.BloodPressureReading
 ```
 
-## 📌 Gyors Referencia
+4. Choose a snapshot name.
 
-| Bean név | Típus | Példa használat |
-|----------|-------|-----------------|
-| `bloodPressureRepository` | `BloodPressureRepository` | `repo.findAll()` |
-| `bloodPressureService` | `BloodPressureService` | `service.getStatistics()` |
-| `dataInitializer` | `DataInitializer` | (csak dev profilban) |
+---
 
-## 🎯 Best Practices
+## 5. HotSwap – reloading modified classes
 
-1. **Mindig cast-olj vagy használj típust** a getBean()-nél
-2. **Használd a teljes package nevet** az első alkalommal
-3. **Import után var-t használhatsz** rövidítésnek
-4. **Snapshot-olj gyakran** hogy ne veszíts adatot
-5. **Használd a Spring button-t** bulk mentéshez
+HotSwap lets you recompile and reload classes into the running Spring Boot JVM.
+
+1. Open a Java class in the editor (e.g. `AIService`).
+2. Select the whole class or leave the selection empty to use the entire file.
+3. In the **Spring Boot REPL** tool window, click **Hot Swap**.
+
+The dev-runtime agent compiles the source and calls `Instrumentation.redefineClasses` to reload it. Only classes that are already loaded by the JVM can be redefined; if you see “class not loaded”, exercise the old code once and then try HotSwap again.
+
+---
+
+## 6. Debugging Tips
+
+### 6.1 `cannot find symbol`
+
+- Make sure you imported the required types or used fully-qualified names.
+- When working with beans:
+
+```java
+return ctx.containsBean("bloodPressureService");
+```
+
+### 6.2 Spring context not bound
+
+- Check that the app is running with the dev-runtime agent.
+- Verify host/port in `Settings → Tools → Spring Boot REPL`.
+- Use **Bind Spring Context** and check the log for success messages.
+
+### 6.3 nREPL / connection issues
+
+- Ensure the nREPL port is open and not used by another process.
+- Try reconnecting from the tool window (Disconnect → Connect).
+
+---
+
+## 7. Best Practices
+
+1. Prefer reflection when you are unsure about classloader boundaries.
+2. Use fully-qualified class names the first time; then add imports.
+3. Use the transcript to keep a history of what was executed and what it returned.
+4. Save snapshots for expensive or hard-to-reproduce values.
+5. Keep Spring Boot REPL bound to localhost only, and use it in development environments. 

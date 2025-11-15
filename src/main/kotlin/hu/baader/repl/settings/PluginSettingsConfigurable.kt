@@ -21,9 +21,10 @@ class PluginSettingsConfigurable : SearchableConfigurable {
     private lateinit var agentJarField: TextFieldWithBrowseButton
     private lateinit var agentPortSpinner: JSpinner
     private lateinit var agentVersionField: JBTextField
+    private lateinit var caretInlineResult: JBCheckBox
 
     override fun getId(): String = "hu.baader.repl.settings"
-    override fun getDisplayName(): String = "Java over nREPL"
+    override fun getDisplayName(): String = "Spring Boot REPL"
 
     override fun createComponent(): JComponent {
         hostField = JBTextField(state.state.host)
@@ -40,6 +41,10 @@ class PluginSettingsConfigurable : SearchableConfigurable {
         }
         agentPortSpinner = JSpinner(SpinnerNumberModel(state.state.agentPort, 1, 65535, 1))
         agentVersionField = JBTextField(state.state.agentMavenVersion)
+        caretInlineResult = JBCheckBox(
+            "Show inline result popup for 'Evaluate at Caret'",
+            state.state.showInlineResultPopupForCaretEval
+        )
 
         panel = JPanel(GridBagLayout())
         val c = GridBagConstraints().apply {
@@ -77,6 +82,13 @@ class PluginSettingsConfigurable : SearchableConfigurable {
             fill = GridBagConstraints.HORIZONTAL
         }
         panel.add(autoConnect, full)
+        val full2 = GridBagConstraints().apply {
+            gridx = 0
+            gridy = 100
+            gridwidth = 2
+            fill = GridBagConstraints.HORIZONTAL
+        }
+        panel.add(caretInlineResult, full2)
 
         return panel
     }
@@ -88,7 +100,8 @@ class PluginSettingsConfigurable : SearchableConfigurable {
                 autoConnect.isSelected != s.autoConnect ||
                 agentJarField.text != s.agentJarPath ||
                 (agentPortSpinner.value as Int) != s.agentPort ||
-                agentVersionField.text != s.agentMavenVersion
+                agentVersionField.text != s.agentMavenVersion ||
+                caretInlineResult.isSelected != s.showInlineResultPopupForCaretEval
     }
 
     override fun apply() {
@@ -99,6 +112,7 @@ class PluginSettingsConfigurable : SearchableConfigurable {
         s.agentJarPath = agentJarField.text.trim()
         s.agentPort = (agentPortSpinner.value as Int)
         s.agentMavenVersion = agentVersionField.text.trim()
+        s.showInlineResultPopupForCaretEval = caretInlineResult.isSelected
     }
 
     override fun reset() {
@@ -109,5 +123,6 @@ class PluginSettingsConfigurable : SearchableConfigurable {
         agentJarField.text = s.agentJarPath
         agentPortSpinner.value = s.agentPort
         agentVersionField.text = s.agentMavenVersion
+        caretInlineResult.isSelected = s.showInlineResultPopupForCaretEval
     }
 }
