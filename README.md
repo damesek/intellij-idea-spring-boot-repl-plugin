@@ -1,33 +1,36 @@
-# Java over nREPL — IntelliJ IDEA Plugin
+# Spring Boot REPL — IntelliJ IDEA Plugin
 
-[![Maven Central – sb-repl-bridge 0.7.2](https://img.shields.io/badge/sb--repl--bridge-0.7.2-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.2)
-[![Maven Central – sb-repl-agent 0.7.2](https://img.shields.io/badge/sb--repl--agent-0.7.2-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.2)
+[![Maven Central – sb-repl-bridge 0.7.4](https://img.shields.io/badge/sb--repl--bridge-0.7.4-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.4)
+[![Maven Central – sb-repl-agent 0.7.4](https://img.shields.io/badge/sb--repl--agent-0.7.4-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.4)
 
-All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA while talking to a live Spring Boot application.
+Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-based evaluation, Spring context binding, HotSwap and HTTP helpers.
 
 ## Modules
-- `src/` – IntelliJ plugin (UI, nREPL kliens, REPL panel, HTTP panel, history).
-- `dev-runtime/` – attacholható JVM agent JShell-es REPL-pel és Spring auto-binddal.
-- `sb-repl-bridge/` – Spring Boot auto-config, ami betolja az `ApplicationContext`-et az agentbe.
-- `sb-repl-agent/` – Mavenes agent csomag, ugyanarra a dev-runtime kódra építve.
+- `src/` – IntelliJ plugin (tool window UI, nREPL client, REPL editor, transcript, HTTP panel, snapshots, history).
+- `dev-runtime/` – attachable JVM agent that exposes a JShell-based REPL and Spring context auto-bind.
+- `sb-repl-bridge/` – Spring-side bridge library (shared `SpringContextHolder`).
+- `sb-repl-agent/` – Maven-packaged dev-runtime agent, used when you do not want to point to a local JAR.
+- `spring-boot-integration/` – example Spring Boot app with embedded nREPL server and Java evaluator.
+- `docs/`, `SPRING_REPL_HELP.md` – additional usage notes and examples.
 
-## Spring Boot integráció (0.7.2)
-`pom.xml`:
+## Spring Boot integration (0.7.4)
+
+Add the bridge and agent to your Spring Boot app:
 
 ```xml
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.2</version>
+  <version>0.7.4</version>
 </dependency>
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-agent</artifactId>
-  <version>0.7.2</version>
+  <version>0.7.4</version>
 </dependency>
 ```
 
-`@SpringBootApplication`:
+Make sure the Spring Boot application scans the bridge package so the auto-configuration is picked up, for example:
 
 ```java
 @SpringBootApplication
@@ -35,105 +38,111 @@ All-in-one toolkit for evaluating Java code over nREPL inside IntelliJ IDEA whil
     "com.yourcompany.yourapp",
     "com.baader.sbrepl.bridge"
 })
-public class Application { }
+public class Application {
+}
 ```
 
-Indítsd el az alkalmazást `dev` profillal, a bridge automatikusan regisztrálja az `ApplicationContext`-et az agent felé.
+Start the application in a dev profile and make sure the agent is either:
 
-## Dev-runtime agent használata
+- attached via `-javaagent` (see dev-runtime below), or  
+- resolved from your local Maven repository as `sb-repl-agent:0.7.4`.
 
-### 1. JAR buildelése
+## Dev-runtime agent
+
+Build the dev-runtime agent JAR:
 
 ```bash
 ./gradlew :dev-runtime:jar
 ```
 
-Ez létrehozza a `dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar` fájlt.
+This creates `dev-runtime/build/libs/dev-runtime-agent-0.7.4.jar`.
 
-### 2/a. Indítás javaagent-tel (közvetlen)
+Run your Spring Boot app with the agent:
 
 ```bash
 java \
-  -javaagent:/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar=port=5557 \
+  -javaagent:/path/to/dev-runtime-agent-0.7.4.jar=port=5557 \
   -jar your-app.jar
 ```
 
-### 2/b. sb-repl-agent 0.7.2 Mavenből
-
-Miután lefuttattad:
+Alternatively, install `sb-repl-agent` into your local Maven repo:
 
 ```bash
 mvn -f sb-repl-bridge/pom.xml clean install -Dgpg.skip=true
-mvn -f sb-repl-agent/pom.xml  clean install -Dgpg.skip=true
+mvn -f sb-repl-agent/pom.xml clean install -Dgpg.skip=true
 ```
 
-az IDE plugin a `~/.m2/repository/hu/baader/sb-repl-agent/0.7.2/...` alól is fel tudja venni az agentet.
+The plugin can then locate the agent under `~/.m2/repository/hu/baader/sb-repl-agent/0.7.3/...`.
 
-## Plugin build és telepítés (0.7.2)
+## Plugin build and installation
+
+Build the IntelliJ plugin ZIP:
 
 ```bash
 ./gradlew buildPlugin
 ```
 
-Telepítés IntelliJ-ben: `Settings → Plugins → Install from Disk`, válaszd a `build/distributions/sb-repl-0.7.2.zip` fájlt, majd restart.
+Install in IntelliJ IDEA: `Settings → Plugins → Install from Disk…`, then select `build/distributions/sb-repl-0.7.4.zip` and restart the IDE.
 
-## Plugin konfigurálása
+## Plugin configuration
 
-`Settings → Tools → Java over nREPL`:
+Open `Settings → Tools → Spring Boot REPL` and configure:
 
-- `Host`: `127.0.0.1`
-- `Port`: `5557`
-- `Agent JAR path`:
-  - üresen hagyható, ha `sb-repl-agent 0.7.2` Mavenből elérhető (`~/.m2`),
-  - vagy add meg a dev-runtime JAR-t:
-    - `/Users/USERNAME/Documents/Codes/sb-repl/dev-runtime/build/libs/dev-runtime-agent-0.7.2.jar`
+- **Host**: usually `127.0.0.1`
+- **Port**: nREPL port, default `5557`
+- **Agent JAR**:
+  - leave empty if `sb-repl-agent:0.7.4` is available in `~/.m2`, or
+  - point to the dev-runtime JAR, e.g. `dev-runtime/build/libs/dev-runtime-agent-0.7.4.jar`
+- **Agent Maven version**: defaults to `0.7.4`
 
-Mentés után:
+Then:
 
-1. Indítsd el a Spring Boot appot.
-2. Nyisd meg a **Spring Boot REPL** tool windowot.
-3. Nyomd meg a **Connect** gombot.
+1. Start your Spring Boot application with the agent.
+2. Open the **Spring Boot REPL** tool window.
+3. Click **Connect**, then **Bind Spring Context** if needed.
 
-Ha a dev-runtime agent fut, a konzolban ezt látod:
+When JShell mode is active you will see:
 
 - `Mode: JShell session (stateful imports & defs)`
-- `Automatically binding Spring context...`
-- `Spring context bound and session updated.`
+- Spring context binding messages in the log.
 
-## REPL használat – tipikus lépések
+## REPL workflow – quick examples
 
-1. Importok és Spring context:
+Bind the Spring context and call a service:
 
 ```java
 import com.baader.devrt.SpringContextHolder;
 import org.springframework.context.ApplicationContext;
-import com.ai.springboot.controller.WebController;
 
 ApplicationContext ctx = (ApplicationContext) SpringContextHolder.get();
-WebController web = ctx.getBean(WebController.class);
+var ai = (com.ai.springboot.service.AIService)
+        ctx.getBean(com.ai.springboot.service.AIService.class);
+ai.generateResponse("Hello from Spring Boot REPL");
 ```
 
-2. Bean hívás és LLM válasz:
-
-```java
-((com.ai.springboot.service.AIService)
-        ctx.getBean(com.ai.springboot.service.AIService.class))
-    .generateResponse("Szia, működik az LLM REPL-ből?");
-```
-
-3. Saját logger JShell-ben:
+Create a logger from the REPL:
 
 ```java
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 Logger logger = LoggerFactory.getLogger("REPL");
-logger.info("✅ AI service is available");
+logger.info("AI service is available");
 ```
 
-4. HotSwap (osztály újratöltése):
+HotSwap a modified class:
 
-- Nyisd meg a módosított osztályt (pl. `AIService`).
-- Jelöld ki a teljes osztályt vagy az egész fájlt.
-- A Spring Boot REPL ablakban nyomd meg a **Hot Swap** gombot, vagy használd a `Reload Class` menüpontot (Spring Boot REPL → Reload Class, Cmd+Shift+R).
+1. Open the Java file in the editor and select the full class (or leave nothing selected to use the whole file).
+2. In the **Spring Boot REPL** tool window, click **Hot Swap**.
+3. The next REPL call uses the reloaded implementation.
 
-Sikeres hot swap esetén a konzolban „Reloaded classes: ...” jellegű üzenet jelenik meg, és a következő REPL hívás már az új kódot futtatja.
+### REPL UI and editor actions
+
+- **REPL tab** – bottom Java editor (stateful JShell), top transcript with collapsible code/result blocks.
+- **Last Result** popup – pretty-printed value of the last evaluation (JSON-aware, syntax-highlighted).
+- **Log** popup – full console output (out/err, nREPL protocol messages).
+- **Editor actions** (from SB Tools / context menu):
+  - Run Selection in Spring Boot REPL
+  - Evaluate at Caret
+  - Reload Class (HotSwap)
+  - Sync Imports and apply import aliases
+  - Insert Bean Getter (searchable Spring bean picker).

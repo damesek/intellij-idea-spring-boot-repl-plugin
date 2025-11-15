@@ -18,7 +18,8 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState.State> 
         var agentJarPath: String = "",
         var agentPort: Int = 5557,
         var agentMavenVersion: String = DEFAULT_AGENT_VERSION,
-        var importAliases: MutableList<ImportAlias> = mutableListOf()
+        var importAliases: MutableList<ImportAlias> = mutableListOf(),
+        var showInlineResultPopupForCaretEval: Boolean = true
     )
 
     private var myState = State()
@@ -30,7 +31,7 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState.State> 
     }
 
     companion object {
-        const val DEFAULT_AGENT_VERSION = "0.7.2"
+        const val DEFAULT_AGENT_VERSION = "0.7.4"
         @JvmStatic
         fun getInstance(): PluginSettingsState = service()
     }

@@ -80,6 +80,14 @@
             <keyboard-shortcut first-keystroke="meta shift E" keymap="$default"/>
         </action>
 
+        <!-- Advanced Editor (session PSI + transcript, popup) -->
+        <action id="hu.baader.repl.OpenAdvancedEditor"
+                class="hu.baader.repl.actions.OpenAdvancedEditorAction"
+                text="Advanced Editor"
+                description="Open advanced Java editor with session PSI and transcript">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+        </action>
+
         <!-- Sync imports from editor file into JShell session -->
         <action id="hu.baader.repl.SyncImportsFromEditor"
                 class="hu.baader.repl.actions.SyncImportsFromEditorAction"

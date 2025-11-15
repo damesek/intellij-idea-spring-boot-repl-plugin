@@ -13,8 +13,11 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.openapi.editor.EditorSettings
+import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.editor.markup.HighlighterLayer
+import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.openapi.ui.Splitter
@@ -39,15 +42,26 @@ import javax.swing.BorderFactory
 import java.awt.Font
 import java.awt.Color
 import com.intellij.psi.PsiFileFactory
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.codeStyle.CodeStyleManager
 import kotlin.text.Regex
 
 class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
+    companion object {
+        /**
+         * First iteration: return null. Will be wired to a PSI-backed Java editor
+         * plus transcript viewer in a later step.
+         */
+        fun createAdvancedEditorPanel(project: Project): JPanel? {
+            // TODO: build Advanced Editor panel (session PSI + transcript)
+            return null
+        }
+    }
+
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val consoleImpl = ConsoleViewImpl(project, true)
         val console: ConsoleView = consoleImpl
         Disposer.register(toolWindow.disposable, console)
-        consoleImpl.editor?.let { it.settings.isUseSoftWraps = true }
 
         val codeSnippetContentType = ConsoleViewContentType(
             "REPL_CODE_SNIPPET",
@@ -60,35 +74,98 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             )
         )
 
-        val document = EditorFactory.getInstance().createDocument("")
-        val editor = EditorFactory.getInstance().createEditor(
-            document,
+        val replDocument = EditorFactory.getInstance().createDocument("")
+        val replEditor = EditorFactory.getInstance().createEditor(
+            replDocument,
             project,
             JavaFileType.INSTANCE,
             false
         ) as EditorEx
 
-        editor.settings.apply {
-            isLineNumbersShown = true
-            isIndentGuidesShown = true
-            isCaretRowShown = true
-            isFoldingOutlineShown = true
-            setTabSize(4)
-            isSmartHome = true
+        val psiFile = PsiFileFactory.getInstance(project)
+            .createFileFromText("SpringBootReplSession.java", JavaFileType.INSTANCE, "")
+        val advancedDocument = PsiDocumentManager.getInstance(project)
+            .getDocument(psiFile)
+            ?: EditorFactory.getInstance().createDocument("")
+        val advancedEditor = EditorFactory.getInstance().createEditor(
+            advancedDocument,
+            project,
+            JavaFileType.INSTANCE,
+            false
+        ) as EditorEx
+
+        fun configureEditorSettings(ed: EditorEx) {
+            ed.settings.apply {
+                isLineNumbersShown = true
+                isIndentGuidesShown = true
+                isCaretRowShown = true
+                isFoldingOutlineShown = true
+                setTabSize(4)
+                isSmartHome = true
+            }
         }
+
+        configureEditorSettings(replEditor)
+        configureEditorSettings(advancedEditor)
 
         val highlighter = EditorHighlighterFactory.getInstance().createEditorHighlighter(
             project,
             JavaFileType.INSTANCE
         )
-        editor.highlighter = highlighter
+        replEditor.highlighter = highlighter
+        advancedEditor.highlighter = highlighter
+
+        var activeEditor: EditorEx = replEditor
 
         val historyService = ReplHistoryService.getInstance(project)
         val history = historyService.entries()
         var historyIndex = history.size
         val lastErrorBuffer = StringBuilder()
+        var blockCounter = 0
 
         val service = NreplService.getInstance(project)
+
+        // Last result viewer (single value, JSON-aware)
+        val resultDocument = EditorFactory.getInstance().createDocument("")
+        val resultEditor = EditorFactory.getInstance()
+            .createViewer(resultDocument, project) as EditorEx
+        resultEditor.apply {
+            isRendererMode = true
+            setCaretEnabled(false)
+            settings.apply {
+                isLineNumbersShown = true
+                isFoldingOutlineShown = true
+                isRightMarginShown = false
+                isUseSoftWraps = true
+            }
+        }
+        resultEditor.highlighter = EditorHighlighterFactory.getInstance()
+            .createEditorHighlighter(project, JavaFileType.INSTANCE)
+
+        // Transcript viewer (history of snippet + result blocks)
+        val transcriptDocument = EditorFactory.getInstance().createDocument("")
+        val transcriptEditor = EditorFactory.getInstance()
+            .createViewer(transcriptDocument, project) as EditorEx
+        transcriptEditor.apply {
+            isRendererMode = true
+            setCaretEnabled(false)
+            settings.apply {
+                isLineNumbersShown = true
+                isFoldingOutlineShown = true
+                isRightMarginShown = false
+                isUseSoftWraps = true
+            }
+        }
+        transcriptEditor.highlighter = EditorHighlighterFactory.getInstance()
+            .createEditorHighlighter(project, JavaFileType.INSTANCE)
+
+        // Panels for last result and log popups
+        val lastResultPanel = JPanel(BorderLayout()).apply {
+            add(JBScrollPane(resultEditor.component), BorderLayout.CENTER)
+        }
+        val logPanel = JPanel(BorderLayout()).apply {
+            add(console.component, BorderLayout.CENTER)
+        }
 
         fun sanitizeVarName(source: String?): String {
             if (source.isNullOrBlank()) return ""
@@ -111,17 +188,17 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             val varName = listOf(preferred, fallback, "bean").first { it.isNotBlank() }
             val snippet = "var $varName = com.baader.devrt.ReplBindings.applicationContext() != null ? ((org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext()).getBean($targetClass.class) : null;\n"
             WriteCommandAction.runWriteCommandAction(project) {
-                val doc = editor.document
-                val offset = editor.caretModel.offset
+                val doc = activeEditor.document
+                val offset = activeEditor.caretModel.offset
                 doc.insertString(offset, snippet)
-                editor.caretModel.moveToOffset(offset + snippet.length)
+                activeEditor.caretModel.moveToOffset(offset + snippet.length)
             }
         }
 
         fun replaceEditorText(value: String) {
             WriteCommandAction.runWriteCommandAction(project) {
-                editor.document.setText(value)
-                editor.caretModel.moveToOffset(editor.document.textLength)
+                replEditor.document.setText(value)
+                replEditor.caretModel.moveToOffset(replEditor.document.textLength)
             }
         }
 
@@ -222,8 +299,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                     .setCancelOnClickOutside(true)
                     .createPopup()
 
-                val width = editor.component.width.coerceAtLeast(400)
-                val height = (editor.component.height * 0.5).toInt().coerceAtLeast(200)
+                val width = activeEditor.component.width.coerceAtLeast(400)
+                val height = (activeEditor.component.height * 0.5).toInt().coerceAtLeast(200)
                 popup.setSize(java.awt.Dimension(width, height))
 
                 list.addMouseListener(object : java.awt.event.MouseAdapter() {
@@ -240,7 +317,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 }
 
                 applyFilter()
-                popup.showInBestPositionFor(editor)
+                popup.showInBestPositionFor(activeEditor)
                 searchField.requestFocusInWindow()
             }
         }
@@ -257,19 +334,81 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             return updated
         }
 
+        service.setDebugSink { line ->
+            console.print("$line\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        }
+
         val unsub = service.onMessage { msg ->
             val out = msg["out"]
-            if (out != null) {
+            if (!out.isNullOrBlank()) {
                 console.print(out, ConsoleViewContentType.NORMAL_OUTPUT)
             }
             val value = msg["value"]
             if (value != null) {
-                val formatted = prettyPrintJsonIfLikely(value) ?: value
+                val jsonFormatted = prettyPrintJsonIfLikely(value)
+                val formatted = jsonFormatted ?: value
                 if (formatted.contains('\n')) {
-                    console.print("=>\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    console.print("\n=>\n", ConsoleViewContentType.SYSTEM_OUTPUT)
                     console.print(formatted + "\n", ConsoleViewContentType.SYSTEM_OUTPUT)
                 } else {
-                    console.print("=> $formatted\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    console.print("\n=> $formatted\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                }
+                ApplicationManager.getApplication().invokeLater {
+                    WriteCommandAction.runWriteCommandAction(project) {
+                        resultDocument.setText(formatted)
+                        val snippet = service.consumeLastEvalSnippet()?.trimEnd()
+                        if (!snippet.isNullOrEmpty()) {
+                            val doc = transcriptDocument
+                            blockCounter += 1
+                            val header = ">>\n"
+                            val body = snippet + "\n"
+                            val arrow = "=>\n"
+                            val valueText = formatted + "\n\n"
+                            val blockText = header + body + arrow + valueText
+
+                            val start = doc.textLength
+                            doc.insertString(start, blockText)
+                            val end = doc.textLength
+                            val headerEnd = start + header.length
+
+                            transcriptEditor.foldingModel.runBatchFoldingOperation {
+                                val foldingModel = transcriptEditor.foldingModel
+                                val region = if (headerEnd < end) {
+                                    foldingModel.addFoldRegion(headerEnd, end, "...")
+                                } else null
+
+                                val regions = foldingModel.allFoldRegions.sortedBy { it.startOffset }
+                                val keepOpen = 5
+                                regions.forEachIndexed { index, r ->
+                                    r.isExpanded = index >= regions.size - keepOpen
+                                }
+                            }
+
+                            // Highlight snippet background within the block
+                            val snippetStart = start + header.length
+                            val snippetEnd = snippetStart + body.length
+                            if (snippetEnd <= doc.textLength) {
+                                val attrs = TextAttributes(
+                                    null,
+                                    JBColor(Color(0xFFF8E1), Color(0x2A2110)),
+                                    null,
+                                    null,
+                                    Font.PLAIN
+                                )
+                                transcriptEditor.markupModel.addRangeHighlighter(
+                                    snippetStart,
+                                    snippetEnd,
+                                    HighlighterLayer.ADDITIONAL_SYNTAX,
+                                    attrs,
+                                    HighlighterTargetArea.EXACT_RANGE
+                                )
+                            }
+
+                            transcriptEditor.caretModel.moveToOffset(doc.textLength)
+                            transcriptEditor.scrollingModel.scrollToCaret(ScrollType.MAKE_VISIBLE)
+                        }
+                    }
+                    updateResultHighlighter(project, resultEditor, jsonFormatted != null)
                 }
             }
             val err = msg["err"]
@@ -286,7 +425,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         val run = object : AnAction("Execute", "Execute selected code or entire document (Ctrl+Enter)", AllIcons.Actions.Execute) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
-                val rawText = editor.selectionModel.selectedText ?: editor.document.text
+                val rawText = activeEditor.selectionModel.selectedText ?: activeEditor.document.text
                 if (rawText.isNotBlank()) {
                     var text = rawText
                     try {
@@ -316,12 +455,13 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 e.presentation.isEnabled = service.isConnected()
             }
         }
-        run.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER"), editor.component)
+        run.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER"), replEditor.component)
+        run.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER"), advancedEditor.component)
 
         val hotSwap = object : AnAction("Hot Swap", "Compile and reload selected class into target JVM", AllIcons.Actions.BuildLoadChanges) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
-                val text = editor.selectionModel.selectedText?.takeIf { it.isNotBlank() } ?: editor.document.text
+                val text = activeEditor.selectionModel.selectedText?.takeIf { it.isNotBlank() } ?: activeEditor.document.text
                 if (text.isBlank()) {
                     console.print("No Java source to hot swap.\n", ConsoleViewContentType.ERROR_OUTPUT)
                     return
@@ -353,8 +493,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
                 val projectRef = e.project ?: project
-                val documentRef = editor.document
-                val selectionModel = editor.selectionModel
+                val documentRef = activeEditor.document
+                val selectionModel = activeEditor.selectionModel
                 val selectedText = selectionModel.selectedText
                 val rangeStart = selectionModel.selectionStart
                 val rangeEnd = selectionModel.selectionEnd
@@ -395,7 +535,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                 }
             }
         }
-        formatCode.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl alt L"), editor.component)
+        formatCode.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl alt L"), replEditor.component)
+        formatCode.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl alt L"), advancedEditor.component)
 
         val beanHelper = object : AnAction("Insert Bean Getter", "Insert applicationContext.getBean(...) snippet", AllIcons.Nodes.Services) {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -502,8 +643,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                     .setTitle("History")
                     .setItemChosenCallback {
                         WriteCommandAction.runWriteCommandAction(project) {
-                            editor.document.setText(it)
-                            editor.caretModel.moveToOffset(editor.document.textLength)
+                            replEditor.document.setText(it)
+                            replEditor.caretModel.moveToOffset(replEditor.document.textLength)
                             historyIndex = history.indexOf(it) + 1
                         }
                     }
@@ -551,6 +692,34 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         val am = ActionManager.getInstance()
         val bindSpringCtx = am.getAction("hu.baader.repl.BindSpringContext")
 
+        val showLastResultPopup = object : AnAction("Last Result", "Show last result viewer", AllIcons.Actions.Preview) {
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+            override fun actionPerformed(e: AnActionEvent) {
+                JBPopupFactory.getInstance()
+                    .createComponentPopupBuilder(lastResultPanel, null)
+                    .setTitle("Last Result")
+                    .setResizable(true)
+                    .setMovable(true)
+                    .setRequestFocus(true)
+                    .createPopup()
+                    .showInBestPositionFor(activeEditor)
+            }
+        }
+
+        val showLogPopup = object : AnAction("Log", "Show log console", AllIcons.Debugger.Console) {
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+            override fun actionPerformed(e: AnActionEvent) {
+                JBPopupFactory.getInstance()
+                    .createComponentPopupBuilder(logPanel, null)
+                    .setTitle("Log")
+                    .setResizable(true)
+                    .setMovable(true)
+                    .setRequestFocus(true)
+                    .createPopup()
+                    .showInBestPositionFor(activeEditor)
+            }
+        }
+
         val topActionGroup = DefaultActionGroup().apply {
             add(hotSwap)
             add(Separator.create())
@@ -566,6 +735,9 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             add(clearHistory)
             add(showLastError)
             add(clear)
+            add(Separator.create())
+            add(showLastResultPopup)
+            add(showLogPopup)
         }
 
         val topToolbar = am.createActionToolbar("JavaReplTopToolbar", topActionGroup, true)
@@ -576,12 +748,19 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             add(run)
         }
         val bottomToolbar = am.createActionToolbar("JavaReplBottomToolbar", bottomActionGroup, true)
-        bottomToolbar.targetComponent = editor.component
+        bottomToolbar.targetComponent = replEditor.component
         val bottomButtonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
             add(bottomToolbar.component)
         }
         val cardPanel = JPanel(CardLayout())
         lateinit var httpQuickPanel: HttpQuickActionsPanel
+        val editorStackLayout = CardLayout()
+        val editorStack = JPanel(editorStackLayout).apply {
+            add(JBScrollPane(replEditor.component), "repl")
+            add(JBScrollPane(advancedEditor.component), "advanced")
+        }
+        editorStackLayout.show(editorStack, "repl")
+
         val httpCard = JPanel(BorderLayout()).apply {
             httpQuickPanel = HttpQuickActionsPanel(project, httpRunner) { expanded ->
                 val layout = cardPanel.layout as CardLayout
@@ -590,16 +769,64 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             add(httpQuickPanel, BorderLayout.CENTER)
         }
         val bottomBar = JPanel(BorderLayout()).apply {
+            val modePanel = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                val replDot = javax.swing.JLabel("●")
+                val replLabel = com.intellij.ui.components.labels.LinkLabel<String>("REPL", null)
+                val advDot = javax.swing.JLabel("●")
+                val advLabel = com.intellij.ui.components.labels.LinkLabel<String>("Advanced", null)
+
+                fun updateDots() {
+                    if (activeEditor === replEditor) {
+                        replDot.foreground = JBColor.GREEN
+                        replLabel.foreground = JBColor.GREEN
+                        advDot.foreground = JBColor.GRAY
+                        advLabel.foreground = JBColor.GRAY
+                    } else {
+                        replDot.foreground = JBColor.GRAY
+                        replLabel.foreground = JBColor.GRAY
+                        advDot.foreground = JBColor.GREEN
+                        advLabel.foreground = JBColor.GREEN
+                    }
+                }
+
+                replLabel.setListener({ _, _ ->
+                    activeEditor = replEditor
+                    editorStackLayout.show(editorStack, "repl")
+                    bottomToolbar.targetComponent = replEditor.component
+                    updateDots()
+                }, null)
+
+                advLabel.setListener({ _, _ ->
+                    activeEditor = advancedEditor
+                    editorStackLayout.show(editorStack, "advanced")
+                    bottomToolbar.targetComponent = advancedEditor.component
+                    updateDots()
+                }, null)
+
+                add(replDot)
+                add(replLabel)
+                add(advDot)
+                add(advLabel)
+                updateDots()
+            }
+
             val httpLink = com.intellij.ui.components.labels.LinkLabel<String>("HTTP", null).apply {
                 setListener({ _, _ -> httpQuickPanel.expandPanel() }, null)
             }
             httpLink.toolTipText = "HTTP esetek megnyitása"
             httpLink.border = BorderFactory.createEmptyBorder(0, 8, 0, 0)
-            add(httpLink, BorderLayout.WEST)
+
+            val leftPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                add(modePanel)
+                add(httpLink)
+            }
+
+            add(leftPanel, BorderLayout.WEST)
             add(bottomButtonPanel, BorderLayout.EAST)
         }
+
         val editorCard = JPanel(BorderLayout()).apply {
-            add(JBScrollPane(editor.component), BorderLayout.CENTER)
+            add(editorStack, BorderLayout.CENTER)
             add(bottomBar, BorderLayout.SOUTH)
         }
         cardPanel.add(editorCard, "editor")
@@ -608,21 +835,25 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
 
         val editorPanel = cardPanel
 
-        val mainConsoleSplit = Splitter(true, 0.75f).apply {
-            firstComponent = console.component
+        val transcriptPanel = JPanel(BorderLayout()).apply {
+            add(JBScrollPane(transcriptEditor.component), BorderLayout.CENTER)
+        }
+
+        val replSplit = Splitter(true, 0.6f).apply {
+            firstComponent = transcriptPanel
             secondComponent = editorPanel
         }
 
         val mainPanel = JPanel(BorderLayout()).apply {
             add(topToolbar.component, BorderLayout.NORTH)
-            add(mainConsoleSplit, BorderLayout.CENTER)
+            add(replSplit, BorderLayout.CENTER)
         }
         topToolbar.targetComponent = mainPanel
 
-        editor.contentComponent.addKeyListener(object : KeyAdapter() {
+        replEditor.contentComponent.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                val caret = editor.caretModel
-                val doc = editor.document
+                val caret = replEditor.caretModel
+                val doc = replEditor.document
                 val lineCount = doc.lineCount
                 val caretLine = caret.logicalPosition.line
                 when (e.keyCode) {
@@ -633,10 +864,10 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         })
 
         val prevCmd = object : AnAction() { override fun actionPerformed(e: AnActionEvent) { loadHistoryEntry(-1) } }
-        prevCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl UP"), editor.component)
+        prevCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl UP"), replEditor.component)
 
         val nextCmd = object : AnAction() { override fun actionPerformed(e: AnActionEvent) { loadHistoryEntry(1) } }
-        nextCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl DOWN"), editor.component)
+        nextCmd.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl DOWN"), replEditor.component)
 
         val mainSplitter = Splitter(false, 0.8f)
         mainSplitter.setFirstComponent(mainPanel)
@@ -652,19 +883,23 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         topActionGroup.add(Separator.create(), Constraints.LAST)
         topActionGroup.add(toggleSidePanelAction, Constraints.LAST)
 
-        val sessionContent = ContentFactory.getInstance().createContent(mainSplitter, "REPL", false)
-        sessionContent.setDisposer(Disposable { 
+        val replContent = ContentFactory.getInstance().createContent(mainSplitter, "REPL", false)
+        replContent.setDisposer(Disposable {
             try { unsub.dispose() } catch (_: Throwable) {}
-            try { EditorFactory.getInstance().releaseEditor(editor) } catch (_: Throwable) {}
+            try { EditorFactory.getInstance().releaseEditor(replEditor) } catch (_: Throwable) {}
+            try { EditorFactory.getInstance().releaseEditor(advancedEditor) } catch (_: Throwable) {}
+            try { EditorFactory.getInstance().releaseEditor(resultEditor) } catch (_: Throwable) {}
+            try { EditorFactory.getInstance().releaseEditor(transcriptEditor) } catch (_: Throwable) {}
             try { httpQuickPanel.dispose() } catch (_: Throwable) {}
+            try { service.setDebugSink(null) } catch (_: Throwable) {}
         })
-        
+
         val insertIntoEditor: (String) -> Unit = { snippet ->
             WriteCommandAction.runWriteCommandAction(project) {
-                val editorDocument = editor.document
-                val offset = editor.caretModel.offset
+                val editorDocument = activeEditor.document
+                val offset = activeEditor.caretModel.offset
                 editorDocument.insertString(offset, snippet)
-                editor.caretModel.moveToOffset(offset + snippet.length)
+                activeEditor.caretModel.moveToOffset(offset + snippet.length)
             }
         }
 
@@ -681,7 +916,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         loadedVariablesPanel.isVisible = false
         mainSplitter.proportion = 1.0f
         
-        toolWindow.contentManager.addContent(sessionContent)
+        toolWindow.contentManager.addContent(replContent)
 
         val snapshotsPanel = SimplifiedSnapshotsPanel(
             connection = { service.takeIf { it.isConnected() } },
@@ -802,5 +1037,22 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         return sb.toString()
+    }
+
+    private fun updateResultHighlighter(project: Project, editor: EditorEx, isJson: Boolean) {
+        val factory = EditorHighlighterFactory.getInstance()
+        val highlighter = if (isJson) {
+            try {
+                val clazz = Class.forName("com.intellij.json.JsonFileType")
+                val instanceField = clazz.getField("INSTANCE")
+                val fileType = instanceField.get(null) as com.intellij.openapi.fileTypes.FileType
+                factory.createEditorHighlighter(project, fileType)
+            } catch (_: Throwable) {
+                factory.createEditorHighlighter(project, JavaFileType.INSTANCE)
+            }
+        } else {
+            factory.createEditorHighlighter(project, JavaFileType.INSTANCE)
+        }
+        editor.highlighter = highlighter
     }
 }

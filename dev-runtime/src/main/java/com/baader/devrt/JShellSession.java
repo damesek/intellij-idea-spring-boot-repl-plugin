@@ -80,37 +80,52 @@ public final class JShellSession implements AutoCloseable {
             return EvalResult.onlyImports(getImports());
         }
 
-        // Okos utolsó sor kezelés:
-        // ha az utolsó nem üres sor kifejezés-szerű és nem ';'-re végződik,
-        // akkor a megelőző sorokat külön, a kifejezést pedig önálló snippetként futtatjuk.
-        List<SnippetEvent> events;
-        List<Integer> nonEmptyIndices = new ArrayList<>();
-        for (int i = 0; i < nonImportLines.size(); i++) {
-            String line = nonImportLines.get(i);
-            if (line != null && !line.trim().isEmpty()) {
-                nonEmptyIndices.add(i);
-            }
-        }
+        // Conservative multi-line handling:
+        // - try to evaluate each non-empty, non-import line as its own snippet
+        //   (var declarations, simple statements, final expression),
+        // - but fall back to a single eval(payload) if lines look like they belong
+        //   to a larger construct (control flow, blocks, etc.).
+        List<SnippetEvent> events = new ArrayList<>();
 
-        if (nonEmptyIndices.size() >= 2) {
-            int lastIdx = nonEmptyIndices.get(nonEmptyIndices.size() - 1);
-            String lastLine = nonImportLines.get(lastIdx);
-            String lastTrim = lastLine.trim();
+        List<String> nonEmptyLines = nonImportLines.stream()
+                .map(l -> l == null ? "" : l.trim())
+                .filter(l -> !l.isEmpty())
+                .toList();
 
-            if (isExpressionCandidate(lastTrim)) {
-                String setup = nonImportLines.subList(0, lastIdx).stream()
-                        .collect(Collectors.joining("\n"))
-                        .trim();
-                events = new ArrayList<>();
-                if (!setup.isEmpty()) {
-                    events.addAll(jshell.eval(setup));
+        if (nonEmptyLines.size() <= 1) {
+            events = jshell.eval(payload);
+        } else {
+            boolean canSplit = true;
+            for (int i = 0; i < nonEmptyLines.size(); i++) {
+                String line = nonEmptyLines.get(i);
+                String lower = line.toLowerCase(Locale.ROOT);
+
+                // Do not split obvious multi-line constructs; fall back to single eval.
+                if (lower.startsWith("class ") || lower.startsWith("interface ")
+                        || lower.startsWith("enum ") || lower.startsWith("record ")
+                        || lower.startsWith("if ") || lower.startsWith("for ")
+                        || lower.startsWith("while ") || lower.startsWith("switch ")
+                        || lower.startsWith("try ") || lower.startsWith("catch ")
+                        || lower.startsWith("finally ") || lower.startsWith("do ")
+                        || lower.startsWith("else ")) {
+                    canSplit = false;
+                    break;
                 }
-                events.addAll(jshell.eval(lastTrim));
+
+                // For all but the last non-empty line, require a ';' terminator to be safe.
+                if (i < nonEmptyLines.size() - 1 && !line.endsWith(";")) {
+                    canSplit = false;
+                    break;
+                }
+            }
+
+            if (canSplit) {
+                for (String line : nonEmptyLines) {
+                    events.addAll(jshell.eval(line));
+                }
             } else {
                 events = jshell.eval(payload);
             }
-        } else {
-            events = jshell.eval(payload);
         }
 
         var output = new StringBuilder();
