@@ -11,12 +11,12 @@ import java.awt.BorderLayout
 import javax.swing.JPanel
 
 /**
- * Opens an "Advanced Editor" popup: left side will host a PSI-backed Java editor,
+ * Opens a "Session Editor" popup: left side will host a PSI-backed Java editor,
  * right side a transcript view. For now this is a thin wrapper that delegates
  * to JavaReplToolWindowFactory to build the panel.
  */
 class OpenAdvancedEditorAction : AnAction(
-    "Advanced Editor",
+    "Session Editor",
     "Open advanced Java editor with session PSI and transcript",
     AllIcons.Actions.IntentionBulb
 ) {
@@ -30,7 +30,7 @@ class OpenAdvancedEditorAction : AnAction(
 
         val popup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(JBScrollPane(panel), panel)
-            .setTitle("Spring Boot REPL – Advanced Editor")
+            .setTitle("Spring Boot REPL – Session Editor")
             .setResizable(true)
             .setMovable(true)
             .setRequestFocus(true)
@@ -40,4 +40,3 @@ class OpenAdvancedEditorAction : AnAction(
         popup.showInFocusCenter()
     }
 }
-

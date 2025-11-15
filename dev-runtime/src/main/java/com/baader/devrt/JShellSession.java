@@ -81,26 +81,60 @@ public final class JShellSession implements AutoCloseable {
         }
 
         // Conservative multi-line handling:
-        // - try to evaluate each non-empty, non-import line as its own snippet
-        //   (var declarations, simple statements, final expression),
-        // - but fall back to a single eval(payload) if lines look like they belong
-        //   to a larger construct (control flow, blocks, etc.).
+        // - split the non-import code into "chunks" separated by blank lines,
+        // - for each chunk, decide whether to evaluate it line-by-line (simple
+        //   vars/expressions) or as a single snippet (e.g. class declarations,
+        //   control-flow blocks),
+        // - this allows patterns like:
+        //     class ReplScratch { ... }
+        //     <blank line>
+        //     new ReplScratch().run();
+        //   where the class and the call are separate JShell snippets.
         List<SnippetEvent> events = new ArrayList<>();
 
-        List<String> nonEmptyLines = nonImportLines.stream()
-                .map(l -> l == null ? "" : l.trim())
-                .filter(l -> !l.isEmpty())
-                .toList();
+        List<String> chunks = new ArrayList<>();
+        StringBuilder currentChunk = new StringBuilder();
+        for (String line : nonImportLines) {
+            String trimmed = line == null ? "" : line.trim();
+            if (trimmed.isEmpty()) {
+                if (currentChunk.length() > 0) {
+                    chunks.add(currentChunk.toString().trim());
+                    currentChunk.setLength(0);
+                }
+            } else {
+                currentChunk.append(line).append("\n");
+            }
+        }
+        if (currentChunk.length() > 0) {
+            chunks.add(currentChunk.toString().trim());
+        }
 
-        if (nonEmptyLines.size() <= 1) {
-            events = jshell.eval(payload);
-        } else {
+        if (chunks.isEmpty()) {
+            return EvalResult.onlyImports(getImports());
+        }
+
+        for (String chunk : chunks) {
+            List<String> nonEmptyLines = Arrays.stream(chunk.split("\\R"))
+                    .map(s -> s == null ? "" : s.trim())
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+
+            if (nonEmptyLines.isEmpty()) {
+                continue;
+            }
+
+            if (nonEmptyLines.size() == 1) {
+                events.addAll(jshell.eval(chunk));
+                continue;
+            }
+
             boolean canSplit = true;
             for (int i = 0; i < nonEmptyLines.size(); i++) {
                 String line = nonEmptyLines.get(i);
                 String lower = line.toLowerCase(Locale.ROOT);
 
-                // Do not split obvious multi-line constructs; fall back to single eval.
+                // Do not split obvious multi-line constructs within a chunk;
+                // evaluate the whole chunk as a single snippet.
                 if (lower.startsWith("class ") || lower.startsWith("interface ")
                         || lower.startsWith("enum ") || lower.startsWith("record ")
                         || lower.startsWith("if ") || lower.startsWith("for ")
@@ -112,7 +146,7 @@ public final class JShellSession implements AutoCloseable {
                     break;
                 }
 
-                // For all but the last non-empty line, require a ';' terminator to be safe.
+                // For all but the last non-empty line in the chunk, require a ';' terminator.
                 if (i < nonEmptyLines.size() - 1 && !line.endsWith(";")) {
                     canSplit = false;
                     break;
@@ -124,7 +158,7 @@ public final class JShellSession implements AutoCloseable {
                     events.addAll(jshell.eval(line));
                 }
             } else {
-                events = jshell.eval(payload);
+                events.addAll(jshell.eval(chunk));
             }
         }
 
