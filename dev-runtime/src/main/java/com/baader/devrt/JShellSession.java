@@ -66,8 +66,13 @@ public final class JShellSession implements AutoCloseable {
         if (!toImport.isEmpty()) {
             addImports(toImport);
         }
-        String payload = lines.stream()
+
+        // Strip import sorok, a maradék lesz az értékelendő payload
+        List<String> nonImportLines = lines.stream()
                 .filter(l -> !l.trim().startsWith("import "))
+                .collect(Collectors.toList());
+
+        String payload = nonImportLines.stream()
                 .collect(Collectors.joining("\n"))
                 .trim();
 
@@ -75,7 +80,39 @@ public final class JShellSession implements AutoCloseable {
             return EvalResult.onlyImports(getImports());
         }
 
-        var events = jshell.eval(payload);
+        // Okos utolsó sor kezelés:
+        // ha az utolsó nem üres sor kifejezés-szerű és nem ';'-re végződik,
+        // akkor a megelőző sorokat külön, a kifejezést pedig önálló snippetként futtatjuk.
+        List<SnippetEvent> events;
+        List<Integer> nonEmptyIndices = new ArrayList<>();
+        for (int i = 0; i < nonImportLines.size(); i++) {
+            String line = nonImportLines.get(i);
+            if (line != null && !line.trim().isEmpty()) {
+                nonEmptyIndices.add(i);
+            }
+        }
+
+        if (nonEmptyIndices.size() >= 2) {
+            int lastIdx = nonEmptyIndices.get(nonEmptyIndices.size() - 1);
+            String lastLine = nonImportLines.get(lastIdx);
+            String lastTrim = lastLine.trim();
+
+            if (isExpressionCandidate(lastTrim)) {
+                String setup = nonImportLines.subList(0, lastIdx).stream()
+                        .collect(Collectors.joining("\n"))
+                        .trim();
+                events = new ArrayList<>();
+                if (!setup.isEmpty()) {
+                    events.addAll(jshell.eval(setup));
+                }
+                events.addAll(jshell.eval(lastTrim));
+            } else {
+                events = jshell.eval(payload);
+            }
+        } else {
+            events = jshell.eval(payload);
+        }
+
         var output = new StringBuilder();
         var values = new ArrayList<String>();
 
@@ -91,6 +128,8 @@ public final class JShellSession implements AutoCloseable {
                                 .append("\n"));
             }
             if (e.value() != null) {
+                // Collect all non-null values (including VAR declarations) so the REPL
+                // can show context objects and assignment results just like JShell.
                 values.add(e.value()); // JShell provides a string representation
             }
             if (e.status() != null && e.status() != jdk.jshell.Snippet.Status.VALID) {
@@ -107,5 +146,36 @@ public final class JShellSession implements AutoCloseable {
         public static EvalResult onlyImports(List<String> imports) {
             return new EvalResult(List.of(), "Imports updated.", imports);
         }
+    }
+
+    /**
+     * Heurisztika annak eldöntésére, hogy egy sor "kifejezés jellegű"-e:
+     * - nem üres
+     * - nem import / típus- vagy vezérlési szerkezet
+     * - nem ';', '{', '}' végű
+     * - nem '.', ')', '}' vagy '@' jellel kezdődik.
+     */
+    private boolean isExpressionCandidate(String line) {
+        if (line == null) return false;
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) return false;
+
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("import ")) return false;
+        if (lower.startsWith("class ") || lower.startsWith("interface ")
+                || lower.startsWith("enum ") || lower.startsWith("record ")) return false;
+        if (lower.startsWith("if ") || lower.startsWith("for ")
+                || lower.startsWith("while ") || lower.startsWith("switch ")
+                || lower.startsWith("try ") || lower.startsWith("catch ")
+                || lower.startsWith("finally ") || lower.startsWith("do ")
+                || lower.startsWith("else ")) return false;
+
+        if (trimmed.endsWith(";")) return false;
+        if (trimmed.endsWith("{") || trimmed.endsWith("}")) return false;
+
+        char first = trimmed.charAt(0);
+        if (first == '.' || first == ')' || first == '}' || first == '@') return false;
+
+        return true;
     }
 }

@@ -8,7 +8,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import hu.baader.repl.nrepl.NreplService
 
-class RunEditorSelectionAction : AnAction("Run Selection in SB Tools") {
+class RunEditorSelectionAction : AnAction("Run Selection") {
     override fun actionPerformed(e: AnActionEvent) {
         val project: Project = e.project ?: return
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
@@ -41,13 +41,12 @@ class RunEditorSelectionAction : AnAction("Run Selection in SB Tools") {
         
         e.presentation.isEnabled = project != null && editor != null
         
-        // Show connection status in text
         if (project != null) {
             val service = NreplService.getInstance(project)
             e.presentation.text = if (service.isConnected()) {
-                "Run Selection in SB Tools (Connected)"
+                "Run Selection (Connected)"
             } else {
-                "Run Selection in SB Tools (Disconnected)"
+                "Run Selection (Disconnected)"
             }
         }
     }

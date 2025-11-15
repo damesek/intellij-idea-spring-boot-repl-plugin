@@ -6,7 +6,7 @@
 
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-bridge</artifactId>
-    <version>0.5.1</version>
+    <version>0.7.1</version>
     <name>Spring Boot Java REPL Bridge</name>
     <description>Auto-configuration that bridges a running Spring context to the sb-repl agent.</description>
     <url>https://github.com/damesek/sb-repl</url>

@@ -24,6 +24,7 @@ public class ReplHandler {
             case ReplOps.IMPORTS_ADD -> handleAddImports(message);
             case ReplOps.SESSION_RESET -> handleResetSession();
             case ReplOps.BIND_SPRING -> handleBindSpring(message);
+            case ReplOps.CLASS_RELOAD -> handleClassReload(message);
             // Snapshot ops can be added here later
             default -> Map.of("status", "error", "message", "Unknown op: " + op);
         };
@@ -37,6 +38,13 @@ public class ReplHandler {
         response.put("values", res.values());
         response.put("output", res.output());
         response.put("imports", res.imports());
+        // Elsődleges visszatérési érték: az utolsó nem-null value
+        if (!res.values().isEmpty()) {
+            String last = res.values().get(res.values().size() - 1);
+            if (last != null) {
+                response.put("value", last);
+            }
+        }
         return response;
     }
 
@@ -59,6 +67,18 @@ public class ReplHandler {
             oldSession.close();
         }
         return Map.of("reset", true);
+    }
+
+    private Map<String, Object> handleClassReload(Map<String, String> msg) {
+        String code = msg.getOrDefault("code", "");
+        JavaCodeEvaluator.HotSwapResult res = JavaCodeEvaluator.hotSwap(code);
+        if (!res.success) {
+            if (res.error != null) {
+                return Map.of("status", "error", "err", res.error);
+            }
+            return Map.of("status", "error", "message", res.message != null ? res.message : "HotSwap failed");
+        }
+        return Map.of("value", res.message != null ? res.message : "HotSwap completed");
     }
 
     private Map<String, Object> handleBindSpring(Map<String, String> msg) {

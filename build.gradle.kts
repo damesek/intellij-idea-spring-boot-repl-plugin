@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "1.0-SNAPSHOT"
+version = "0.7.0"
 
 repositories {
     mavenCentral()
@@ -38,7 +38,7 @@ intellijPlatform {
     pluginConfiguration {
         name = "Java over nREPL"
         id = "hu.baader.java-over-nrepl"
-        version = "1.0.0"
+        version = "0.7.0"
         vendor {
             name = "Baader"
         }

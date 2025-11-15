@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "1.0-SNAPSHOT"
+version = "0.7.0"
 
 repositories {
     mavenCentral()

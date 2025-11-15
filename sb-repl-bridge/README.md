@@ -8,7 +8,7 @@ Spring Boot auto-configuration that exposes the currently running `ApplicationCo
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-bridge</artifactId>
-  <version>0.5.0-SNAPSHOT</version>
+  <version>0.7.1</version>
 </dependency>
 ```
 
@@ -16,7 +16,7 @@ Gradle (Kotlin):
 
 ```kotlin
 dependencies {
-    implementation("hu.baader:sb-repl-bridge:0.5.0-SNAPSHOT")
+    implementation("hu.baader:sb-repl-bridge:0.7.1")
 }
 ```
 
@@ -30,7 +30,7 @@ dependencies {
 
 1. Add the dependency to your Spring Boot application.
 2. Start the app normally (no extra configuration required).
-3. In IntelliJ, run the Java REPL plugin and use **Attach & Inject Dev Runtime** followed by **Bind Spring Context** (or the combined Quick Action).
+3. In IntelliJ, open **SB Tools** and hit the single **Connect** button (attaches, loads the agent, and binds Spring context in one go).
 4. The REPL now exposes `applicationContext` immediately; bean lookups and helper buttons (Insert Bean Getter) work without extra reflection hacks.
 
 ## 🔧 Configuration Options
@@ -41,12 +41,12 @@ dependencies {
 
 ## 📤 Publishing Notes
 
-A complete Sonatype Central Portal setup (GPG + `central-publishing-maven-plugin`) is already present in the `pom.xml`. Reuse the same Maven settings you used for `spring-boot-clojure-repl` to sign and push the `0.5.x` artifacts in sync with each sb-repl release.
+A complete Sonatype Central Portal setup (GPG + `central-publishing-maven-plugin`) is already present in the `pom.xml`. Reuse the same Maven settings you used for `spring-boot-clojure-repl` to sign and push the `0.7.x` artifacts in sync with each sb-repl release.
 
 ## 🛣 Next Steps
 
-* Publish `sb-repl-bridge` together with `sb-repl` `0.5.x` releases so Spring apps consume a stable dependency instead of copying helper classes.
-* Optionally add a `sb-repl-agent` artifact that exposes the dev runtime JAR via Maven Central, allowing IDE tooling to resolve it without manual file pickers.
+* Publish `sb-repl-bridge` together with `sb-repl` `0.7.x` releases so Spring apps consume a stable dependency instead of copying helper classes.
+* Publish/update the `sb-repl-agent` artifact that exposes the dev runtime JAR via Maven Central, allowing IDE tooling to resolve it without manual file pickers.
 
 ## 💽 SnapshotHelper
 

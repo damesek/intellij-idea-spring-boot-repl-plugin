@@ -43,20 +43,38 @@
     </extensions>
     
     <actions>
-        <!-- Run Selection Action -->
+        <!-- Spring REPL group in Code menu + editor popup -->
+        <group id="hu.baader.repl.SpringReplGroup"
+               text="Spring REPL"
+               popup="true">
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+
+        <!-- Run Selection -->
         <action id="hu.baader.repl.RunEditorSelection"
                 class="hu.baader.repl.actions.RunEditorSelectionAction"
-                text="Run Selection in SB Tools"
-                description="Send current editor's selection (or file) to Java-over-nREPL">
-            <add-to-group group-id="CodeMenu" anchor="last"/>
+                text="Run Selection"
+                description="Send selection (or whole file) to Spring REPL">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
             <keyboard-shortcut first-keystroke="ctrl shift R" keymap="$default"/>
         </action>
 
-        <!-- Editor Popup Menu -->
-        <action id="hu.baader.repl.RunEditorSelectionPopup"
-                class="hu.baader.repl.actions.RunEditorSelectionAction"
-                text="Run Selection in SB Tools">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        <!-- Evaluate at Caret -->
+        <action id="hu.baader.repl.EvaluateAtCaret"
+                class="hu.baader.repl.actions.EvaluateAtCaretAction"
+                text="Evaluate at Caret"
+                description="Send expression at caret to Spring REPL">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+            <keyboard-shortcut first-keystroke="meta shift E" keymap="$default"/>
+        </action>
+
+        <!-- Sync imports from editor file into JShell session -->
+        <action id="hu.baader.repl.SyncImportsFromEditor"
+                class="hu.baader.repl.actions.SyncImportsFromEditorAction"
+                text="Sync Imports"
+                description="Send current Java file imports to Spring REPL JShell session">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
         </action>
 
         <!-- Attach & Inject Dev Runtime -->
@@ -73,6 +91,15 @@
                 text="Bind Spring Context"
                 description="Bind Spring ApplicationContext into dev runtime for REPL usage">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!-- Reload Class from Editor -->
+        <action id="hu.baader.repl.ReloadClassFromEditor"
+                class="hu.baader.repl.actions.ReloadClassFromEditorAction"
+                text="Reload Class"
+                description="Compile and hot-swap current editor file into target JVM">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+            <keyboard-shortcut first-keystroke="meta shift R" keymap="$default"/>
         </action>
     </actions>
 </idea-plugin>

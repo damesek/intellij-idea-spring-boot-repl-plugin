@@ -331,7 +331,18 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
                                 console.print("Mode: JShell session (stateful imports & defs)\n", ConsoleViewContentType.SYSTEM_OUTPUT)
                                 console.print("Automatically binding Spring context...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
                                 service.bindSpring(
-                                    onResult = { msg -> console.print("Auto-bind successful: $msg\n", ConsoleViewContentType.SYSTEM_OUTPUT) },
+                                    onResult = { msg ->
+                                        console.print("Auto-bind successful: $msg\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                        try {
+                                            val snippet = """
+                                                var ctx = (org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext();
+                                            """.trimIndent()
+                                            service.eval(snippet)
+                                            console.print("Spring context variable 'ctx' initialized in JShell session.\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                        } catch (ex: Exception) {
+                                            console.print("Failed to initialize ctx: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
+                                        }
+                                    },
                                     onError = { err -> console.print("Auto-bind failed: $err\n", ConsoleViewContentType.ERROR_OUTPUT) }
                                 )
                             } else {

@@ -87,8 +87,12 @@ public class MiniNreplServer {
             response.put("session", sessionId);
             
             // Send value, out, message, and err responses
-            if (response.containsKey("values") && !response.get("values").equals("[]")) {
-                respond(Map.of("id", id, "session", sessionId, "value", response.get("values")), out);
+            String primaryValue = response.get("value");
+            String valuesField = response.get("values");
+            if (primaryValue != null && !primaryValue.isEmpty()) {
+                respond(Map.of("id", id, "session", sessionId, "value", primaryValue), out);
+            } else if (valuesField != null && !valuesField.equals("[]")) {
+                respond(Map.of("id", id, "session", sessionId, "value", valuesField), out);
             }
             String output = response.getOrDefault("output", "");
             String message = response.getOrDefault("message", "");
