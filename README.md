@@ -5,6 +5,14 @@
 
 Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-based evaluation, Spring context binding, HotSwap and HTTP helpers.
 
+![Spring Boot REPL – Session Editor](docs/images/spring-boot-repl-3.png)
+
+![Spring Boot REPL – Functions](docs/images/spring-boot-repl-2.png)
+
+![Spring Boot REPL – Formatted output](docs/images/spring-boot-repl-1.png)
+
+![Spring Boot REPL – Transcript and HTTP](docs/images/spring-boot-repl-old.png)
+
 ## Modules
 - `src/` – IntelliJ plugin (tool window UI, nREPL client, REPL editor, transcript, HTTP panel, snapshots, history).
 - `dev-runtime/` – attachable JVM agent that exposes a JShell-based REPL and Spring context auto-bind.

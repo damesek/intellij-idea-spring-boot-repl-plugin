@@ -2,6 +2,12 @@
 
 This guide explains how to use the **Spring Boot REPL** IntelliJ plugin with a running Spring Boot application, and how the REPL transcript, snapshots and helpers fit together.
 
+![Spring Boot REPL – Session Editor](docs/images/java-repl.png)
+
+![Spring Boot REPL – Run Selection](docs/images/intellij-idea-plugin-java-repl.png)
+
+![Spring Boot REPL – Transcript and HTTP](docs/images/spring-boot-repl-transcript-http.png)
+
 ---
 
 ## 1. Quick Start
