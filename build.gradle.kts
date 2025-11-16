@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.7.4"
+version = "0.7.5"
 
 repositories {
     mavenCentral()
@@ -38,7 +38,7 @@ intellijPlatform {
     pluginConfiguration {
         name = "Spring Boot REPL"
         id = "hu.baader.java-over-nrepl"
-        version = "0.7.4"
+        version = "0.7.5"
         vendor {
             name = "Baader"
         }
@@ -53,7 +53,7 @@ intellijPlatform {
             - Optional HTTP panel for managing and replaying REST calls
             
             Getting started:
-            1. Add sb-repl-bridge and sb-repl-agent 0.7.4 to your Spring Boot app and include the bridge package (com.baader.sbrepl.bridge) in @ComponentScan.
+            1. Add sb-repl-bridge and sb-repl-agent 0.7.5 to your Spring Boot app and include the bridge package (com.baader.sbrepl.bridge) in @ComponentScan.
             2. Run the app with the dev-runtime agent (for example on port 5557).
             3. In IntelliJ, open Settings → Tools → Spring Boot REPL, configure host/port and (optionally) the agent JAR, then click Connect in the tool window.
             4. Use the REPL tab to evaluate Java against the live ctx, and the Snapshots / HTTP tabs to persist values and exercise REST endpoints.

@@ -31,7 +31,7 @@ class PluginSettingsState : PersistentStateComponent<PluginSettingsState.State> 
     }
 
     companion object {
-        const val DEFAULT_AGENT_VERSION = "0.7.4"
+        const val DEFAULT_AGENT_VERSION = "0.7.5"
         @JvmStatic
         fun getInstance(): PluginSettingsState = service()
     }

@@ -1,7 +1,7 @@
 # Spring Boot REPL — IntelliJ IDEA Plugin
 
-[![Maven Central – sb-repl-bridge 0.7.4](https://img.shields.io/badge/sb--repl--bridge-0.7.4-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.4)
-[![Maven Central – sb-repl-agent 0.7.4](https://img.shields.io/badge/sb--repl--agent-0.7.4-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.4)
+[![Maven Central – sb-repl-bridge 0.7.5](https://img.shields.io/badge/sb--repl--bridge-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.5)
+[![Maven Central – sb-repl-agent 0.7.5](https://img.shields.io/badge/sb--repl--agent-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.5)
 
 Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-based evaluation, Spring context binding, HotSwap and HTTP helpers.
 
@@ -13,7 +13,7 @@ Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code ove
 - `spring-boot-integration/` – example Spring Boot app with embedded nREPL server and Java evaluator.
 - `docs/`, `SPRING_REPL_HELP.md` – additional usage notes and examples.
 
-## Spring Boot integration (0.7.4)
+## Spring Boot integration (0.7.5)
 
 Add the bridge and agent to your Spring Boot app:
 
@@ -21,12 +21,12 @@ Add the bridge and agent to your Spring Boot app:
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.4</version>
+  <version>0.7.5</version>
 </dependency>
 <dependency>
   <groupId>hu.baader</groupId>
   <artifactId>sb-repl-agent</artifactId>
-  <version>0.7.4</version>
+  <version>0.7.5</version>
 </dependency>
 ```
 
@@ -45,7 +45,7 @@ public class Application {
 Start the application in a dev profile and make sure the agent is either:
 
 - attached via `-javaagent` (see dev-runtime below), or  
-- resolved from your local Maven repository as `sb-repl-agent:0.7.4`.
+- resolved from your local Maven repository as `sb-repl-agent:0.7.5`.
 
 ## Dev-runtime agent
 
@@ -55,13 +55,13 @@ Build the dev-runtime agent JAR:
 ./gradlew :dev-runtime:jar
 ```
 
-This creates `dev-runtime/build/libs/dev-runtime-agent-0.7.4.jar`.
+This creates `dev-runtime/build/libs/dev-runtime-agent-0.7.5.jar`.
 
 Run your Spring Boot app with the agent:
 
 ```bash
 java \
-  -javaagent:/path/to/dev-runtime-agent-0.7.4.jar=port=5557 \
+  -javaagent:/path/to/dev-runtime-agent-0.7.5.jar=port=5557 \
   -jar your-app.jar
 ```
 
@@ -82,7 +82,7 @@ Build the IntelliJ plugin ZIP:
 ./gradlew buildPlugin
 ```
 
-Install in IntelliJ IDEA: `Settings → Plugins → Install from Disk…`, then select `build/distributions/sb-repl-0.7.4.zip` and restart the IDE.
+Install in IntelliJ IDEA: `Settings → Plugins → Install from Disk…`, then select `build/distributions/sb-repl-0.7.5.zip` and restart the IDE.
 
 ## Plugin configuration
 
@@ -91,9 +91,9 @@ Open `Settings → Tools → Spring Boot REPL` and configure:
 - **Host**: usually `127.0.0.1`
 - **Port**: nREPL port, default `5557`
 - **Agent JAR**:
-  - leave empty if `sb-repl-agent:0.7.4` is available in `~/.m2`, or
-  - point to the dev-runtime JAR, e.g. `dev-runtime/build/libs/dev-runtime-agent-0.7.4.jar`
-- **Agent Maven version**: defaults to `0.7.4`
+  - leave empty if `sb-repl-agent:0.7.5` is available in `~/.m2`, or
+  - point to the dev-runtime JAR, e.g. `dev-runtime/build/libs/dev-runtime-agent-0.7.5.jar`
+- **Agent Maven version**: defaults to `0.7.5`
 
 Then:
 
