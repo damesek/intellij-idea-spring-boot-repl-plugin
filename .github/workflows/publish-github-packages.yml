@@ -1,0 +1,32 @@
+name: Publish sb-repl libraries to GitHub Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java and Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish sb-repl-bridge
+        run: mvn -B -f sb-repl-bridge/pom.xml deploy
+
+      - name: Publish sb-repl-agent
+        run: mvn -B -f sb-repl-agent/pom.xml deploy

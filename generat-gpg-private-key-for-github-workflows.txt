@@ -1,0 +1,2 @@
+gpg --list-secret-keys  
+gpg --armor --export-secret-keys {elozobol ide jon} > private-key.asc

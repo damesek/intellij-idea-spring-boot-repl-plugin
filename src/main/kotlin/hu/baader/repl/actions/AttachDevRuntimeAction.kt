@@ -5,6 +5,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooser
@@ -33,8 +34,8 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
             }
         }
         if (agentJar.isEmpty() || !File(agentJar).exists()) {
-            // Fallback to Maven local wrapper if present
-            val autoJar = resolveAgentFromMaven(settings)
+            // Fallback to Maven local wrapper; if missing, try to resolve via Maven
+            val autoJar = resolveAgentFromMaven(project, settings)
             if (autoJar != null) {
                 agentJar = autoJar.absolutePath
                 settings.agentJarPath = agentJar
@@ -141,12 +142,45 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
             .notify(project)
     }
 
-    private fun resolveAgentFromMaven(settings: PluginSettingsState.State): File? {
+    private fun resolveAgentFromMaven(project: Project, settings: PluginSettingsState.State): File? {
         val version = settings.agentMavenVersion.trim().ifBlank { PluginSettingsState.DEFAULT_AGENT_VERSION }
         val home = System.getProperty("user.home") ?: return null
         val candidate = Paths.get(home, ".m2", "repository", "hu", "baader", "sb-repl-agent", version,
             "sb-repl-agent-$version.jar").toFile()
-        return candidate.takeIf { it.exists() }
+        if (candidate.exists()) return candidate
+
+        // Attempt to resolve via Maven (dependency:get) so the JAR appears in ~/.m2.
+        return ProgressManager.getInstance().runProcessWithProgressSynchronously<File?>(
+            {
+                try {
+                    val mvnExecutable = detectMavenExecutable()
+                    val process = ProcessBuilder(
+                        mvnExecutable,
+                        "-q",
+                        "dependency:get",
+                        "-Dartifact=hu.baader:sb-repl-agent:$version",
+                        "-Dtransitive=false"
+                    )
+                        .redirectErrorStream(true)
+                        .start()
+
+                    // Drain output so the process does not block on full buffers.
+                    process.inputStream.bufferedReader().use { it.readText() }
+                    val exitCode = process.waitFor()
+                    if (exitCode == 0 && candidate.exists()) candidate else null
+                } catch (_: Throwable) {
+                    null
+                }
+            },
+            "Resolving sb-repl-agent $version via Maven…",
+            true,
+            project
+        )
+    }
+
+    private fun detectMavenExecutable(): String {
+        val os = System.getProperty("os.name")?.lowercase() ?: return "mvn"
+        return if (os.contains("win")) "mvn.cmd" else "mvn"
     }
 
     private fun resolveDevRuntimeFromProject(): File? {

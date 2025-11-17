@@ -80,7 +80,7 @@ mvn -f sb-repl-bridge/pom.xml clean install -Dgpg.skip=true
 mvn -f sb-repl-agent/pom.xml clean install -Dgpg.skip=true
 ```
 
-The plugin can then locate the agent under `~/.m2/repository/hu/baader/sb-repl-agent/0.7.3/...`.
+The plugin will then locate the agent under `~/.m2/repository/hu/baader/sb-repl-agent/0.7.5/...`. If it is not found there, it will attempt to resolve `sb-repl-agent` via Maven (using the configured Agent Maven version and your standard Maven repositories, e.g. Maven Central), and only fall back to manual JAR selection if that also fails.
 
 ## Plugin build and installation
 
