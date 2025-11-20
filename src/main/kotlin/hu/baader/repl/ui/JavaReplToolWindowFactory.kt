@@ -25,6 +25,7 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.JBColor
 import hu.baader.repl.nrepl.NreplService
 import hu.baader.repl.history.ReplHistoryService
+import hu.baader.repl.agent.AgentAutoAttacher
 import javax.swing.JPanel
 import java.awt.BorderLayout
 import java.awt.CardLayout
@@ -190,6 +191,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         val service = NreplService.getInstance(project)
+        val autoAttacher = AgentAutoAttacher(project)
+        val autoAttachAttempted = java.util.concurrent.atomic.AtomicBoolean(false)
 
         // When the Advanced scratch file is saved, optionally rebuild the JShell session
         // from its contents so REPL execution is based on the latest version.
@@ -672,32 +675,66 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
             override fun actionPerformed(e: AnActionEvent) {
                 try {
-                    console.print("Connecting to nREPL server...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    val settings = PluginSettingsState.getInstance().state
+                    // Ensure host is set, as Attach action or RunConfiguration may only set the port.
+                    settings.host = "127.0.0.1"
+                    console.print("Connecting to nREPL server at ${settings.host}:${settings.port}...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+
                     service.connectAsync { isJshell ->
                         ApplicationManager.getApplication().invokeLater {
                             console.print("Connected successfully!\n", ConsoleViewContentType.SYSTEM_OUTPUT)
                             if (isJshell) {
                                 sessionSnippets.clear()
                                 console.print("Mode: JShell session (stateful imports & defs)\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                                console.print("Automatically binding Spring context...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                                service.bindSpring(
-                                    onResult = { msg ->
-                                        console.print("Auto-bind successful: $msg\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                                        try {
-                                            val snippet = """
-                                                var ctx = (org.springframework.context.ApplicationContext) com.baader.devrt.ReplBindings.applicationContext();
-                                            """.trimIndent()
-                                            service.eval(snippet)
-                                            console.print("Spring context variable 'ctx' initialized in JShell session.\n", ConsoleViewContentType.SYSTEM_OUTPUT)
-                                        } catch (ex: Exception) {
-                                            console.print("Failed to initialize ctx: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
-                                        }
-                                    },
-                                    onError = { err -> console.print("Auto-bind failed: $err\n", ConsoleViewContentType.ERROR_OUTPUT) }
-                                )
                             } else {
                                 console.print("Mode: Legacy (java-eval). For values, use 'return ...;\n'", ConsoleViewContentType.SYSTEM_OUTPUT)
                             }
+
+                            // Automatic Spring context bind on connect (zero-config UX).
+                            console.print("Binding Spring context...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                            service.bindSpring(
+                                onResult = { v ->
+                                    if (v.equals("true", ignoreCase = true)) {
+                                        console.print("Spring context bound (auto).\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                        // Initialize 'ctx' variable in the JShell session via reflection.
+                                        try {
+                                            service.eval(
+                                                """
+                                                try {
+                                                    Class<?> holder = Class.forName("com.baader.devrt.SpringContextHolder");
+                                                    java.lang.reflect.Method get = holder.getMethod("get");
+                                                    Object ctxObj = get.invoke(null);
+                                                    if (ctxObj != null) {
+                                                        var ctx = (org.springframework.context.ApplicationContext) ctxObj;
+                                                        System.out.println("Spring context variable 'ctx' initialized in JShell session.");
+                                                    } else {
+                                                        System.out.println("SpringContextHolder.get() returned null.");
+                                                    }
+                                                } catch (Throwable t) {
+                                                    System.out.println("ctx init skipped: " + t);
+                                                }
+                                                return null;
+                                                """.trimIndent(),
+                                                onResult = { result ->
+                                                    result["out"]?.let { console.print(it + "\n", ConsoleViewContentType.SYSTEM_OUTPUT) }
+                                                    result["err"]?.let { console.print(it + "\n", ConsoleViewContentType.ERROR_OUTPUT) }
+                                                },
+                                                onError = { err ->
+                                                    console.print("ctx init error: $err\n", ConsoleViewContentType.ERROR_OUTPUT)
+                                                }
+                                            )
+                                        } catch (ex: Exception) {
+                                            console.print("ctx init failed: ${ex.message}\n", ConsoleViewContentType.ERROR_OUTPUT)
+                                        }
+                                    } else {
+                                        console.print("Spring context not auto-bound (bind-spring returned: $v).\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                        console.print("Use 'Bind Spring Context' from the Tools menu if needed.\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+                                    }
+                                },
+                                onError = { err ->
+                                    console.print("Bind Spring error: $err\n", ConsoleViewContentType.ERROR_OUTPUT)
+                                }
+                            )
                         }
                     }
                 } catch (t: Throwable) {
@@ -901,14 +938,14 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             border = BorderFactory.createEmptyBorder(0, 8, 0, 8)
             val modePanel = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                 val replDot = javax.swing.JLabel("●")
-                val replLabel = javax.swing.JLabel("REPL")
+                val replLabel = javax.swing.JLabel("jREPL")
                 val advDot = javax.swing.JLabel("●")
-                val advLabel = javax.swing.JLabel("Session Editor")
+                val advLabel = javax.swing.JLabel("jEval")
                 replDot.foreground = JBColor.GREEN
                 replLabel.foreground = JBColor.foreground()
                 advDot.foreground = JBColor.GRAY
                 advLabel.foreground = JBColor.GRAY
-                advLabel.toolTipText = "Switch to Session Editor (full code insight)"
+                advLabel.toolTipText = "Switch to jEval (JavaCodeEvaluator-based session)"
                 advLabel.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
 
                 replLabel.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
@@ -1025,7 +1062,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         topActionGroup.add(Separator.create(), Constraints.LAST)
         topActionGroup.add(toggleSidePanelAction, Constraints.LAST)
 
-        val replContent = ContentFactory.getInstance().createContent(mainSplitter, "REPL", false)
+        val replContent = ContentFactory.getInstance().createContent(mainSplitter, "jREPL", false)
         replContent.setDisposer(Disposable {
             try { unsub.dispose() } catch (_: Throwable) {}
             try { EditorFactory.getInstance().releaseEditor(replEditor) } catch (_: Throwable) {}

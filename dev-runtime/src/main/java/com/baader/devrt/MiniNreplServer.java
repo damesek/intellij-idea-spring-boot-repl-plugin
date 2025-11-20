@@ -15,7 +15,6 @@ public class MiniNreplServer {
     private final int port;
     private ServerSocket serverSocket;
     private ExecutorService executor;
-    private volatile boolean running;
     private final ReplHandler replHandler = new ReplHandler();
 
     public MiniNreplServer(int port) { this.port = port; }
@@ -23,18 +22,21 @@ public class MiniNreplServer {
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         executor = Executors.newCachedThreadPool();
-        running = true;
         System.out.println("nREPL server started on port " + port);
-        executor.submit(() -> {
-            while (running) {
+        Thread serverThread = new Thread(() -> {
+            while (true) { // Loop indefinitely
                 try {
                     Socket s = serverSocket.accept();
                     executor.submit(new Client(s));
                 } catch (IOException e) {
-                    if (running) e.printStackTrace();
+                    // Log error but continue running to accept next client
+                    System.err.println("[dev-runtime] Error accepting client connection: " + e.getMessage());
                 }
             }
         });
+        serverThread.setDaemon(true);
+        serverThread.setName("dev-runtime-accept");
+        serverThread.start();
     }
 
     class Client implements Runnable {

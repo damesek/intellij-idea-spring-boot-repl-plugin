@@ -4,15 +4,16 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.VirtualFile
 import hu.baader.repl.nrepl.NreplService
 import hu.baader.repl.settings.PluginSettingsState
+import hu.baader.repl.agent.BundledAgentProvider
 import java.io.File
 import java.nio.file.Paths
 
@@ -22,57 +23,7 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
     override fun actionPerformed(e: AnActionEvent) {
         val project: Project = e.project ?: return
         val settings = PluginSettingsState.getInstance().state
-
-        var agentJar = settings.agentJarPath.trim()
-        if (agentJar.isEmpty() || !File(agentJar).exists()) {
-            // Prefer dev-runtime agent built from this repo if available (JShell features)
-            val devRt = resolveDevRuntimeFromProject()
-            if (devRt != null) {
-                agentJar = devRt.absolutePath
-                settings.agentJarPath = agentJar
-                notify(project, "Using dev-runtime agent (${devRt.name}).", NotificationType.INFORMATION)
-            }
-        }
-        if (agentJar.isEmpty() || !File(agentJar).exists()) {
-            // Fallback to Maven local wrapper; if missing, try to resolve via Maven
-            val autoJar = resolveAgentFromMaven(project, settings)
-            if (autoJar != null) {
-                agentJar = autoJar.absolutePath
-                settings.agentJarPath = agentJar
-                notify(project, "Using sb-repl-agent from Maven local (${autoJar.name}).", NotificationType.INFORMATION)
-            }
-        }
-        if (agentJar.isEmpty() || !File(agentJar).exists()) {
-            // Offer a file chooser to pick the agent JAR on-the-fly
-            val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor()
-                .withTitle("Select Dev Runtime Agent JAR")
-            val file: VirtualFile? = FileChooser.chooseFile(descriptor, project, null)
-            if (file != null && !file.isDirectory) {
-                val chosen = file.path
-                if (chosen.endsWith(".jar", ignoreCase = true) && File(chosen).exists()) {
-                    agentJar = chosen
-                    settings.agentJarPath = agentJar
-                }
-            }
-            if (agentJar.isEmpty() || !File(agentJar).exists()) {
-                // Fallback: prompt for path manually
-                val manual = Messages.showInputDialog(
-                    project,
-                    "Enter absolute path to dev-runtime-agent JAR:",
-                    "Dev Runtime Agent Path",
-                    null,
-                    agentJar,
-                    null
-                )
-                if (manual.isNullOrBlank() || !File(manual).exists()) {
-                    notify(project, "Agent JAR not selected.", NotificationType.WARNING)
-                    return
-                } else {
-                    agentJar = manual.trim()
-                    settings.agentJarPath = agentJar
-                }
-            }
-        }
+        val agentJar = resolveAgentJar(project, settings) ?: return
 
         // List JVMs
         val vms = try {
@@ -107,29 +58,11 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
             } finally {
                 try { vm.detach() } catch (_: Throwable) {}
             }
-            notify(project, "Agent injected into PID ${vmDesc.id()}.", NotificationType.INFORMATION)
 
-            // Auto-connect to the dev runtime server
-            val svc = NreplService.getInstance(project)
-            try {
-                // Use configured host/port (host likely 127.0.0.1)
-                svc.disconnect()
-                PluginSettingsState.getInstance().state.host = "127.0.0.1"
-                PluginSettingsState.getInstance().state.port = settings.agentPort
-                svc.connectAsync()
-                notify(project, "Connecting to dev runtime on ${settings.agentPort}…", NotificationType.INFORMATION)
-                // After connect, check capabilities; if legacy mode, offer to pick dev-runtime jar
-                ApplicationManager.getApplication().executeOnPooledThread {
-                    try { Thread.sleep(1500) } catch (_: InterruptedException) {}
-                    ApplicationManager.getApplication().invokeLater {
-                        if (!svc.isJshellMode()) {
-                            notify(project, "Legacy agent detected (no JShell). Select dev-runtime-agent JAR for full features.", NotificationType.WARNING)
-                        }
-                    }
-                }
-            } catch (t: Throwable) {
-                notify(project, "Connect failed after injection: ${t.message}", NotificationType.WARNING)
-            }
+            // Save the port used for the agent to settings
+            PluginSettingsState.getInstance().state.port = settings.agentPort
+            notify(project, "Agent injected into PID ${vmDesc.id()} on port ${settings.agentPort}. You can now press 'Connect' in the REPL window.", NotificationType.INFORMATION)
+
         } catch (t: Throwable) {
             notify(project, "Attach failed: ${t.message}", NotificationType.ERROR)
         }
@@ -137,9 +70,69 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
 
     private fun notify(project: Project, msg: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Java REPL")
+            .getNotificationGroup("Spring Boot REPL")
             .createNotification(msg, type)
             .notify(project)
+    }
+
+    private fun resolveAgentJar(project: Project, settings: PluginSettingsState.State): String? {
+        val explicit = settings.agentJarPath.trim()
+        if (explicit.isNotEmpty() && File(explicit).exists()) {
+            return explicit
+        }
+
+        // Prefer a locally built dev-runtime agent when working from source
+        val devRt = resolveDevRuntimeFromProject()
+        if (devRt != null) {
+            val path = devRt.absolutePath
+            settings.agentJarPath = path
+            notify(project, "Using dev-runtime agent (${devRt.name}).", NotificationType.INFORMATION)
+            return path
+        }
+
+        BundledAgentProvider.getBundledAgentJar()?.let {
+            notify(project, "Using bundled dev-runtime agent.", NotificationType.INFORMATION)
+            return it
+        }
+
+        // Fallback to Maven local wrapper; if missing, try to resolve via Maven
+        val autoJar = resolveAgentFromMaven(project, settings)
+        if (autoJar != null) {
+            val path = autoJar.absolutePath
+            settings.agentJarPath = path
+            notify(project, "Using sb-repl-agent from Maven local (${autoJar.name}).", NotificationType.INFORMATION)
+            return path
+        }
+
+        // Offer a file chooser to pick the agent JAR on-the-fly
+        val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor()
+            .withTitle("Select Dev Runtime Agent JAR")
+        val file: VirtualFile? = FileChooser.chooseFile(descriptor, project, null)
+        if (file != null && !file.isDirectory) {
+            val chosen = file.path
+            if (chosen.endsWith(".jar", ignoreCase = true) && File(chosen).exists()) {
+                settings.agentJarPath = chosen
+                return chosen
+            }
+        }
+
+        // Fallback: prompt for path manually
+        val manual = Messages.showInputDialog(
+            project,
+            "Enter absolute path to dev-runtime-agent JAR:",
+            "Dev Runtime Agent Path",
+            null,
+            settings.agentJarPath,
+            null
+        )
+        if (manual.isNullOrBlank() || !File(manual).exists()) {
+            notify(project, "Agent JAR not selected.", NotificationType.WARNING)
+            return null
+        } else {
+            val path = manual.trim()
+            settings.agentJarPath = path
+            return path
+        }
     }
 
     private fun resolveAgentFromMaven(project: Project, settings: PluginSettingsState.State): File? {
@@ -150,9 +143,10 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
         if (candidate.exists()) return candidate
 
         // Attempt to resolve via Maven (dependency:get) so the JAR appears in ~/.m2.
-        return ProgressManager.getInstance().runProcessWithProgressSynchronously<File?>(
+        var resolved: File? = null
+        ProgressManager.getInstance().runProcessWithProgressSynchronously(
             {
-                try {
+                resolved = try {
                     val mvnExecutable = detectMavenExecutable()
                     val process = ProcessBuilder(
                         mvnExecutable,
@@ -176,6 +170,7 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime", "Attach t
             true,
             project
         )
+        return resolved
     }
 
     private fun detectMavenExecutable(): String {

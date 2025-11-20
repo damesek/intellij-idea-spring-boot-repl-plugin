@@ -72,7 +72,7 @@ class PluginSettingsConfigurable : SearchableConfigurable {
 
         row("Host:", hostField)
         row("Port:", portSpinner)
-        row("Agent JAR:", agentJarField)
+        row("Agent JAR (leave empty to use bundled):", agentJarField)
         row("Agent Port:", agentPortSpinner)
         row("Agent Maven version:", agentVersionField)
         val full = GridBagConstraints().apply {

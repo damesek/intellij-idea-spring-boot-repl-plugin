@@ -7,6 +7,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Set;
 
+/**
+ * Heurisztikus Spring ApplicationContext-kereső az agent oldalán.
+ * Több lépcsőben próbálkozik, és ha talál contextet, a SpringContextHolder-be rakja.
+ */
 final class AutoBinder {
 
     static void scheduleAutoBind() {
@@ -161,6 +165,9 @@ final class AutoBinder {
             MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
             // Nothing to do here for ctx, but presence may help later heuristics
             // e.g., search for ObjectNames containing "spring" if needed
+            if (mbs != null) {
+                System.out.println("[auto-bind] JMX server available: " + mbs.getDefaultDomain());
+            }
         } catch (Throwable ignored) {}
     }
 }

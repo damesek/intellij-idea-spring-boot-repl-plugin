@@ -58,8 +58,7 @@ class JavaCodeEvaluator {
                 }
                 return new EvalResult(null, sb.toString());
             }
-            ClassLoader parent = Thread.currentThread().getContextClassLoader();
-            if (parent == null) parent = JavaCodeEvaluator.class.getClassLoader();
+            ClassLoader parent = resolveAppClassLoader();
             InMemoryClassLoader cl = new InMemoryClassLoader(parent, mem.getCompiledClasses());
             Class<?> clazz = cl.loadClass(className);
             Method run = clazz.getMethod("run");
@@ -93,8 +92,7 @@ class JavaCodeEvaluator {
                 }
                 return new EvalObj(null, sb.toString());
             }
-            ClassLoader parent = Thread.currentThread().getContextClassLoader();
-            if (parent == null) parent = JavaCodeEvaluator.class.getClassLoader();
+            ClassLoader parent = resolveAppClassLoader();
             InMemoryClassLoader cl = new InMemoryClassLoader(parent, mem.getCompiledClasses());
             Class<?> clazz = cl.loadClass(className);
             Method run = clazz.getMethod("run");

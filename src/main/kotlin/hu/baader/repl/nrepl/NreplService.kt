@@ -81,10 +81,21 @@ class NreplService(private val project: Project) {
         debugSink?.invoke(message)
     }
 
-    fun eval(code: String) {
+    fun eval(code: String, onResult: ((Map<String, String>) -> Unit)? = null, onError: ((String) -> Unit)? = null) {
         val c = client ?: throw IllegalStateException("Not connected to nREPL")
         lastEvalSnippet = code
-        c.eval(code)
+        c.sendOp("eval", mapOf("code" to code)) { m ->
+            if (m["err"] != null) {
+                onError?.invoke(m["err"]!!)
+            }
+            else {
+                onResult?.invoke(m)
+            }
+        }
+    }
+
+    fun eval(code: String) {
+        eval(code, null, null)
     }
 
     fun consumeLastEvalSnippet(): String? {

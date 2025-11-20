@@ -43,7 +43,7 @@ class BindSpringContextAction : AnAction("Bind Spring Context", "Connect to Spri
 
     private fun notify(project: Project, msg: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Java REPL")
+            .getNotificationGroup("Spring Boot REPL")
             .createNotification(msg, type)
             .notify(project)
     }

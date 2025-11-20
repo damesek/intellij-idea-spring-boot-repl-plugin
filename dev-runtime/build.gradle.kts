@@ -17,6 +17,12 @@ java {
 
 dependencies {
     compileOnly("org.springframework:spring-context:6.0.13")
+    compileOnly("org.slf4j:slf4j-api:2.0.9")
+
+    // Add Byte Buddy for bytecode manipulation
+    implementation("net.bytebuddy:byte-buddy:1.14.9")
+    implementation("net.bytebuddy:byte-buddy-agent:1.14.9")
+
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
@@ -32,7 +38,7 @@ tasks.jar {
                 "Premain-Class" to "com.baader.devrt.Agent",
                 "Agent-Class" to "com.baader.devrt.Agent",
                 "Can-Redefine-Classes" to "true",
-                "Can-Retransform-Classes" to "false"
+                "Can-Retransform-Classes" to "true"
             )
         )
     }

@@ -51,6 +51,9 @@
 
         <!-- Project Service for HTTP request cases -->
         <projectService serviceImplementation="hu.baader.repl.ui.HttpRequestService"/>
+
+        <!-- Run Configuration Type -->
+        <configurationType implementation="hu.baader.repl.runner.SpringBootReplConfigurationType"/>
     </extensions>
     
     <actions>

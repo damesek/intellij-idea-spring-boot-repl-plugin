@@ -128,7 +128,15 @@ public class ReplHandler {
 
     private Map<String, Object> handleBindSpring(Map<String, String> msg) {
         try {
-            boolean bound = AutoBinder.tryBindOnce();
+            // Prefer context captured by the transformer; if not present, fall back to
+            // a one-shot auto-bind attempt (LiveBeansView-based).
+            boolean bound = SpringContextHolder.get() != null;
+            if (!bound) {
+                System.out.println("[dev-runtime] bind-spring: no context in holder yet, trying AutoBinder...");
+                bound = AutoBinder.tryBindOnce();
+            } else {
+                System.out.println("[dev-runtime] bind-spring: context already present in holder.");
+            }
             if (bound) {
                 // If bound, reset the session to include the ApplicationContext
                 Object ctx = SpringContextHolder.get();
@@ -136,10 +144,14 @@ public class ReplHandler {
                 if (oldSession != null) {
                     oldSession.close();
                 }
+                System.out.println("[dev-runtime] bind-spring: session updated with ApplicationContext: " +
+                        (ctx != null ? ctx.getClass().getName() : "null"));
                 return Map.of("value", "true", "message", "Spring context bound and session updated.");
             }
+            System.out.println("[dev-runtime] bind-spring: no ApplicationContext available (transformer + AutoBinder failed).");
             return Map.of("value", "false", "message", "Spring context could not be bound.");
         } catch (Throwable t) {
+            System.out.println("[dev-runtime] bind-spring: error: " + t);
             return Map.of("status", "error", "err", t.toString());
         }
     }

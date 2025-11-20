@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.Copy
+import org.gradle.jvm.tasks.Jar
+
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.21"
@@ -20,8 +23,21 @@ dependencies {
         bundledPlugin("com.intellij.java")
         instrumentationTools()
     }
-    
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+}
+
+// Bundle the dev-runtime agent into the plugin for zero-config attach.
+val bundledAgentDir = layout.buildDirectory.dir("generated/bundledAgent")
+val copyDevRuntimeAgent = tasks.register<Copy>("copyDevRuntimeAgent") {
+    dependsOn(project(":dev-runtime").tasks.named<Jar>("jar"))
+    from(project(":dev-runtime").tasks.named<Jar>("jar").map { it.archiveFile }) {
+        into("agent")
+        rename { "dev-runtime-agent.jar" }
+    }
+    into(bundledAgentDir)
+}
+
+sourceSets.main {
+    resources.srcDir(bundledAgentDir)
 }
 
 kotlin {
@@ -32,6 +48,10 @@ java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
+}
+
+tasks.processResources {
+    dependsOn(copyDevRuntimeAgent)
 }
 
 intellijPlatform {
