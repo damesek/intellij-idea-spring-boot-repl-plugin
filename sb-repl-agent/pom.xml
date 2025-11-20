@@ -6,7 +6,7 @@
 
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-agent</artifactId>
-    <version>0.7.5</version>
+    <version>0.8.0</version>
     <name>sb-repl Agent</name>
     <description>Attachable JVM agent that exposes an nREPL endpoint for the sb-repl IntelliJ plugin.</description>
     <url>https://github.com/damesek/sb-repl</url>

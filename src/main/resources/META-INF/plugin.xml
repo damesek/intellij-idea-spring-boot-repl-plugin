@@ -4,26 +4,29 @@
     <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
     
     <description><![CDATA[
-      Spring Boot REPL for IntelliJ IDEA.<br/>
-      Evaluate Java code against a live Spring Boot application, with automatic context binding and hot-reload support.
+      <b>Spring Boot REPL for IntelliJ IDEA</b><br/>
+      Evaluate Java code against a live Spring Boot application via an in-process dev-runtime agent,
+      with JShell-based jREPL, JavaCodeEvaluator-based jEval, snapshots, HTTP helpers and automatic Spring context binding.
       <br/><br/>
-      <b>Features</b>
+      <b>Key features</b>
       <ul>
-        <li>Attach a lightweight dev-runtime agent to a running Spring Boot JVM</li>
-        <li>JShell-based Java REPL with stateful imports and variables</li>
-        <li>Automatic Spring context binding and a pre-initialized <code>ctx</code> (ApplicationContext) helper</li>
+        <li>Zero-config Spring Boot REPL run configuration (no extra dependencies or @ComponentScan needed)</li>
+        <li>Bundled dev-runtime agent attached automatically via <code>-javaagent</code></li>
+        <li>JShell-based <code>jREPL</code> (stateful imports &amp; defs) and <code>jEval</code> (JavaCodeEvaluator) modes</li>
+        <li>Automatic Spring context binding with a pre-initialized <code>ctx</code> helper in the JShell session</li>
         <li>Hot-swap support for editing and reloading classes on the fly</li>
-        <li>Editor actions: Run Selection, Evaluate at Caret, Reload Class, Sync Imports</li>
-        <li>Optional HTTP panel for managing and replaying REST calls</li>
+        <li>Snapshots &amp; Loaded Variables panel for capturing and reusing state</li>
+        <li>HTTP panel for managing and replaying REST calls</li>
+        <li>Editor actions: Run Selection, Evaluate at Caret, Reload Class, Sync Imports, Insert Bean Getter</li>
       </ul>
       <br/>
-      <b>Quick usage</b>
+      <b>Quick usage (v0.8.0)</b>
       <ol>
-        <li>Add <code>sb-repl-bridge</code> and <code>sb-repl-agent</code> (or the dev-runtime agent JAR) to your Spring Boot project.</li>
-        <li>Start the application and attach the agent (via JVM <code>-javaagent</code> option or the plugin's Attach action).</li>
-        <li>Open the <b>Spring Boot REPL</b> tool window and press <b>Connect</b>; the plugin auto-binds the Spring context and initializes <code>ctx</code>.</li>
-        <li>Run snippets such as <code>((com.example.AIService) ctx.getBean(com.example.AIService.class)).generateResponse("Hello")</code> directly against the live app.</li>
-        <li>Use the editor Spring Boot REPL menu (Run Selection, Evaluate at Caret, Reload Class, Sync Imports) to drive the REPL from your source files.</li>
+        <li>Create a <b>Spring Boot REPL</b> run configuration and set the main class to your Spring Boot application.</li>
+        <li>Run the configuration; the bundled dev-runtime agent attaches automatically and starts an in-process nREPL server.</li>
+        <li>Open the <b>Spring Boot REPL</b> tool window; the plugin auto-connects and binds the Spring context so <code>ctx</code> is immediately available in jREPL.</li>
+        <li>Evaluate snippets such as <code>ctx.getBean(com.example.AIService.class).generateResponse("Hello")</code> directly against the live app.</li>
+        <li>Use the editor Spring Boot REPL menu (Run Selection, jEval, Reload Class, Sync Imports) to drive the REPL from your source files.</li>
       </ol>
     ]]></description>
     

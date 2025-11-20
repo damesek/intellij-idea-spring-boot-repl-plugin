@@ -1,9 +1,24 @@
 # Spring Boot REPL — IntelliJ IDEA Plugin
 
-[![Maven Central – sb-repl-bridge 0.7.5](https://img.shields.io/badge/sb--repl--bridge-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.5)
-[![Maven Central – sb-repl-agent 0.7.5](https://img.shields.io/badge/sb--repl--agent-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.5)
 
-Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-like or JavaCodeEvaluator-like evaluation, Snapshots-Variables, Spring context binding, HotSwap and HTTP helpers.
+For years, Java developers have envied the immediate feedback loop of dynamic languages like Python or Clojure. We've dealt with "restart hell," complex configurations, and slow debugging cycles just to test a single method. "That ends today". 
+
+This plugin brings the true power of REPL-Driven Development to the Spring Boot ecosystem, with zero friction. Started as a fun side project, but it turned into a tool I use daily. It's currently in alpha, but ready for you to tinker with. 
+
+Make the magic happen, share with me your feedback!
+
+****WHAT is this?****
+
+***Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-like or JavaCodeEvaluator-like evaluation, Snapshots-Variables, Spring context binding, HotSwap and HTTP helpers.***
+
+
+- **Powered by Java Attach API**: Utilizing the same advanced technology as industry-standard tools (like JRebel or JProfiler), the plugin dynamically injects itself into your running JVM without requiring a restart.
+- **Live Context Access**: You aren't running in a sandbox. You have full access to your live Spring Context, active Beans, and database connections.
+
+    Example: Just type userService.findAllByStatus("ACTIVE") and interact with your real data immediately.
+
+
+****RELEASES****
 
 v0.8.0 is a **major** release which support Spring Boot REPL run configs (without extra dependencies and configurations).
 
@@ -31,7 +46,7 @@ v0.5.0 - initial version
 - `spring-boot-integration/` – example Spring Boot app with embedded nREPL server and Java evaluator.
 - `docs/`, `SPRING_REPL_HELP.md` – additional usage notes and examples.
 
-## Spring Boot integration (0.7.5, zero-config)
+## Spring Boot integration (0.8.0, zero-config)
 
 For local development with IntelliJ IDEA you do **not** need to add any dependencies or code to your Spring Boot app.
 
@@ -46,7 +61,7 @@ For local development with IntelliJ IDEA you do **not** need to add any dependen
    - the Spring context is bound and a `ctx` variable is initialized in the jREPL (like JShell) and jEval (like real JavaCodeEvaluator) session.
 
 
-The `sb-repl-bridge` and `sb-repl-agent` modules v0.7.5 remain available if you:
+The `sb-repl-bridge` and `sb-repl-agent` modules v0.8.0 remain available if you:
 
 - run the dev-runtime agent manually (outside IntelliJ),
 - want to share `SpringContextHolder` between the agent and the app in non-standard setups,
