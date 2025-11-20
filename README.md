@@ -3,7 +3,13 @@
 [![Maven Central – sb-repl-bridge 0.7.5](https://img.shields.io/badge/sb--repl--bridge-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-bridge/0.7.5)
 [![Maven Central – sb-repl-agent 0.7.5](https://img.shields.io/badge/sb--repl--agent-0.7.5-blue?logo=apache%20maven&style=for-the-badge)](https://central.sonatype.com/artifact/hu.baader/sb-repl-agent/0.7.5)
 
-Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-based evaluation, Spring context binding, HotSwap and HTTP helpers.
+Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code over nREPL against a live Spring Boot JVM, with JShell-like or JavaCodeEvaluator-like evaluation, Snapshots-Variables, Spring context binding, HotSwap and HTTP helpers.
+
+v0.8.0 is a **major** release which support Spring Boot REPL run configs (without extra dependencies and configurations).
+
+![Spring Boot REPL – Spring Boot REPL Run Config + ctx](docs/images/spring-boot-repl-zero-config.png)
+
+v0.7.5 this version used plugin + dependencies and extra configs
 
 ![Spring Boot REPL – Session Editor](docs/images/spring-boot-repl-3.png)
 
@@ -11,107 +17,62 @@ Spring Boot REPL is an IntelliJ IDEA plugin that lets you evaluate Java code ove
 
 ![Spring Boot REPL – Formatted output](docs/images/spring-boot-repl-1.png)
 
+
+v0.5.0 - initial version
 ![Spring Boot REPL – Transcript and HTTP](docs/images/spring-boot-repl-old.png)
+
+
 
 ## Modules
 - `src/` – IntelliJ plugin (tool window UI, nREPL client, REPL editor, transcript, HTTP panel, snapshots, history).
 - `dev-runtime/` – attachable JVM agent that exposes a JShell-based REPL and Spring context auto-bind.
-- `sb-repl-bridge/` – Spring-side bridge library (shared `SpringContextHolder`).
-- `sb-repl-agent/` – Maven-packaged dev-runtime agent, used when you do not want to point to a local JAR.
+- `sb-repl-bridge/` – optional Spring-side bridge library (shared `SpringContextHolder`) for advanced / remote setups.
+- `sb-repl-agent/` – Maven-packaged dev-runtime agent, for manual integration outside IntelliJ.
 - `spring-boot-integration/` – example Spring Boot app with embedded nREPL server and Java evaluator.
 - `docs/`, `SPRING_REPL_HELP.md` – additional usage notes and examples.
 
-## Spring Boot integration (0.7.5)
+## Spring Boot integration (0.7.5, zero-config)
 
-Add the bridge and agent to your Spring Boot app:
+For local development with IntelliJ IDEA you do **not** need to add any dependencies or code to your Spring Boot app.
 
-```xml
-<dependency>
-  <groupId>hu.baader</groupId>
-  <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.5</version>
-</dependency>
-<dependency>
-  <groupId>hu.baader</groupId>
-  <artifactId>sb-repl-agent</artifactId>
-  <version>0.7.5</version>
-</dependency>
-```
+1. Install the plugin ZIP in IntelliJ IDEA (see below).
+2. Create a **Run Configuration** of type **Spring Boot REPL** and set its main class to your Spring Boot application.
+3. Run this configuration:
+   - the bundled dev-runtime agent,
+   - the agent starts an in-process nREPL server,
+   - the Spring `ApplicationContext` is captured via `SpringApplication.run(...)` and auto-bound.
+4. Open the **Spring Boot REPL** tool window:
+   - the plugin auto-connects to the dev-runtime nREPL (or you can click **Connect** once),
+   - the Spring context is bound and a `ctx` variable is initialized in the jREPL (like JShell) and jEval (like real JavaCodeEvaluator) session.
 
-Make sure the Spring Boot application scans the bridge package so the auto-configuration is picked up, for example:
 
-```java
-@SpringBootApplication
-@ComponentScan(basePackages = {
-    "com.yourcompany.yourapp",
-    "com.baader.sbrepl.bridge"
-})
-public class Application {
-}
-```
+The `sb-repl-bridge` and `sb-repl-agent` modules v0.7.5 remain available if you:
 
-Start the application in a dev profile and make sure the agent is either:
+- run the dev-runtime agent manually (outside IntelliJ),
+- want to share `SpringContextHolder` between the agent and the app in non-standard setups,
+- or integrate with other tools that expect these artifacts from Maven Central.
 
-- attached via `-javaagent` (see dev-runtime below), or  
-- resolved from your local Maven repository as `sb-repl-agent:0.7.5`.
-
-## Dev-runtime agent
-
-Build the dev-runtime agent JAR:
-
-```bash
-./gradlew :dev-runtime:jar
-```
-
-This creates `dev-runtime/build/libs/dev-runtime-agent-0.7.5.jar`.
-
-Run your Spring Boot app with the agent:
-
-```bash
-java \
-  -javaagent:/path/to/dev-runtime-agent-0.7.5.jar=port=5557 \
-  -jar your-app.jar
-```
-
-Alternatively, install `sb-repl-agent` into your local Maven repo:
-
-```bash
-mvn -f sb-repl-bridge/pom.xml clean install -Dgpg.skip=true
-mvn -f sb-repl-agent/pom.xml clean install -Dgpg.skip=true
-```
-
-The plugin will then locate the agent under `~/.m2/repository/hu/baader/sb-repl-agent/0.7.5/...`. If it is not found there, it will attempt to resolve `sb-repl-agent` via Maven (using the configured Agent Maven version and your standard Maven repositories, e.g. Maven Central), and only fall back to manual JAR selection if that also fails.
-
-## Plugin build and installation
-
-Build the IntelliJ plugin ZIP:
-
-```bash
-./gradlew buildPlugin
-```
-
-Install in IntelliJ IDEA: `Settings → Plugins → Install from Disk…`, then select `build/distributions/sb-repl-0.7.5.zip` and restart the IDE.
 
 ## Plugin configuration
 
 Open `Settings → Tools → Spring Boot REPL` and configure:
 
 - **Host**: usually `127.0.0.1`
-- **Port**: nREPL port, default `5557`
-- **Agent JAR**:
-  - leave empty if `sb-repl-agent:0.7.5` is available in `~/.m2`, or
-  - point to the dev-runtime JAR, e.g. `dev-runtime/build/libs/dev-runtime-agent-0.7.5.jar`
-- **Agent Maven version**: defaults to `0.7.5`
+- **Port**: nREPL port (should match the agent port; default `5557`)
+- **Agent port**: port where the dev-runtime agent listens (used by the Spring Boot REPL Run Configuration).
+- **Agent JAR (optional)**:
+  - leave empty to use the agent bundled into the plugin, or
+  - point to a custom dev-runtime JAR if you need a different version / remote setup.
 
 Then:
 
-1. Start your Spring Boot application with the agent.
+1. Run your Spring Boot application via the **Spring Boot REPL** run configuration (bundled agent auto-attached).
 2. Open the **Spring Boot REPL** tool window.
-3. Click **Connect**, then **Bind Spring Context** if needed.
+3. The plugin auto-connects and binds the Spring context; the `ctx` variable is ready in JREPL. A manual **Connect** / **Bind Spring Context** is only needed as a fallback.
 
-When JShell mode is active you will see:
+When JREPL mode is active you will see:
 
-- `Mode: JShell session (stateful imports & defs)`
+- `Mode: JREPL session (stateful imports & defs)`
 - Spring context binding messages in the log.
 
 ## REPL workflow – quick examples
