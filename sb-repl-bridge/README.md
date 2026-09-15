@@ -1,64 +1,40 @@
-# sb-repl-bridge
+# Spring Boot REPL bridge
 
-Spring Boot auto-configuration that exposes the currently running `ApplicationContext` to the sb-repl development agent. Add the dependency, run the plugin's **Attach & Inject** action, and the REPL immediately sees `applicationContext` without any manual helper classes in your project.
+The optional 0.20.0 bridge exposes a **ready** Spring context to the development agent. Normal startup through the IntelliJ **Enable Spring Boot REPL** checkbox already instruments startup, so the bridge is primarily useful when attaching after the application has started and for application capture/tap calls.
 
-## 📦 Dependency
+Build the bridge locally using `./gradlew :sb-repl-bridge:jar` or `mvn -f sb-repl-bridge/pom.xml package`. The project version is `hu.baader:sb-repl-bridge:0.20.0`; publication to a remote Maven repository is a separate release step.
 
-```xml
-<dependency>
-  <groupId>hu.baader</groupId>
-  <artifactId>sb-repl-bridge</artifactId>
-  <version>0.7.2</version>
-</dependency>
+`DevRuntimeBridgeConfig` records its own context on `ApplicationReadyEvent`, clears it on `ContextClosedEvent`, and ignores unrelated child contexts. It can remember readiness before an agent is attached. The agent remains the sole owner of `com.baader.devrt.SpringContextHolder`; the bridge contains no duplicate class with that name. Disable the bridge using `sb.repl.bridge.enabled=false`.
+
+After explicitly choosing the JVM in **Attach & Inject Dev Runtime**, the plugin uses its private endpoint to connect. The ready context is exposed as `ctx` in the Java REPL. A context restart expires old session objects and requires Reset.
+
+`com.baader.sbrepl.bridge.SnapshotHelper` delegates to the canonical runtime snapshot repository, resolving the agent on each call so an earlier absent agent is not cached forever:
+
+```java
+SnapshotHelper.pin("live-object", object);
+SnapshotHelper.save("data", dto);
+var restored = SnapshotHelper.load("data");
 ```
 
-Gradle (Kotlin):
+LIVE references have session/application scope and expire. DATA is an atomic JSON snapshot capped at 200 MiB including metadata and requires application Jackson. `save` is synchronous; DATA captured from an application callback is accessible from the REPL in the same application namespace. Its serialized size is not a heap limit: loading/importing large data needs additional application memory. Missing codecs and serialization errors are reported; saving does not silently switch modes. Calls made from ordinary application threads use application scope; LIVE pins in a REPL session belong to that session. See the [main README](../README.md) for generic types, mix-ins, limits and migration.
 
-```kotlin
-dependencies {
-    implementation("hu.baader:sb-repl-bridge:0.7.2")
-}
-```
 
-## ⚙️ What it does
-
-* Registers `DevRuntimeBridgeConfig`, an `ApplicationContextAware` bean that pushes the context into `com.baader.devrt.SpringContextHolder` as soon as Spring finishes bootstrapping.
-* Ships the matching `SpringContextHolder` copy so both the agent and the host JVM see the same fully qualified type.
-* Auto-configures itself only when the sb-repl agent is present. Disable via `sb.repl.bridge.enabled=false` if needed.
-
-## 🚀 Usage Steps
-
-1. Add the dependency to your Spring Boot application.
-2. Start the app normally (no extra configuration required).
-3. In IntelliJ, open the **Spring Boot REPL** tool window and hit the single **Connect** button (attaches, loads the agent, and binds Spring context in one go).
-4. The REPL now exposes `applicationContext` immediately; bean lookups and helper buttons (Insert Bean Getter) work without extra reflection hacks.
-
-## 🔧 Configuration Options
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `sb.repl.bridge.enabled` | `true` | Flip to `false` to skip registering the bridge. |
-
-## 📤 Publishing Notes
-
-A complete Sonatype Central Portal setup (GPG + `central-publishing-maven-plugin`) is already present in the `pom.xml`. Reuse the same Maven settings you used for `spring-boot-clojure-repl` to sign and push the `0.7.x` artifacts in sync with each sb-repl release.
-
-## 🛣 Next Steps
-
-* Publish `sb-repl-bridge` together with `sb-repl` `0.7.x` releases so Spring apps consume a stable dependency instead of copying helper classes.
-* Publish/update the `sb-repl-agent` artifact that exposes the dev runtime JAR via Maven Central, allowing IDE tooling to resolve it without manual file pickers.
-
-## 💽 SnapshotHelper
-
-A `com.baader.sbrepl.bridge.SnapshotHelper` segít abban, hogy egyszerűen ments/felolvass futás közben adatokat a dev-runtime snapshot tárába:
+## Capture rules
 
 ```java
 import com.baader.sbrepl.bridge.SnapshotHelper;
 
-SnapshotHelper.save("auditPageLimit10", page);
-var saved = SnapshotHelper.load("auditPageLimit10");
+SnapshotHelper.capture("cv-input", requestId, inputDto);
+// Build an expensive projection only when the next matching capture is armed:
+SnapshotHelper.captureLazy("cv-input", requestId, () -> projectToDto(input));
 ```
 
-- A helper egyszerre hívja a dev-runtime `SnapshotStore`-t és `SnapshotManager`-t, így a mentés azonnal megjelenik az IntelliJ Snapshots paneljén **és** JSON-ként is letárolódik a `~/.java-repl-snapshots` könyvtárban.
-- A snapshot elnevezésed lehet tetszőleges (például `auditPageLimit10`), így több állapot is külön néven visszanézhető.
-- Méretlimit ugyanaz, mint eddig: a JSON fájlok mérete határozza meg, mennyit tudsz tartósan megtartani, a memória mód pedig a JVM heapet használja.
+Arm the point from **Snapshots → Capture next** in the REPL. Set a snapshot name, optional exact case ID filter, capture count (1–100) and sampling interval (1–10000). A matching application call claims the applicable rules and returns `true` when capture succeeds. Non-matches, exhausted rules, expiry or an absent agent return `false` without calling the supplier. Projection/serialization failures return `false` and appear in trigger status. Fatal JVM errors are not swallowed. The ordinary `save` API continues to throw on failure.
+
+There are up to 16 independent session-owned rules per JVM. Multiple saves receive a sequence suffix, or use `${sequence}` in the output name; overlapping active output names are rejected. Pending rules expire after five minutes in the UI and are released on reset, disconnect or context replacement. A capture already claimed can finish. Saving is synchronous: it captures the caller's selected data before that caller continues. Snapshot mix-ins from the arming session are copied before projection begins, and overlapping rules share one supplier invocation. Use stable DTOs; this is not a transaction over concurrent mutations.
+
+Build/install the matching version from this checkout with `mvn -f sb-repl-bridge/pom.xml install -Dgpg.skip=true`, then use `hu.baader:sb-repl-bridge:0.20.0` in the development application. A source checkout or local build does not imply that this version has been published to Maven Central.
+
+## Live values
+
+`SnapshotHelper.tap("cv-input", inputDto)` sends a live value to explicitly subscribed REPL sessions. Enable **Tap / Trace → Start tap** in IDEA, optionally with an exact label filter. An absent agent or no matching subscriber returns `false`; the call does not serialize or save the object. Double-click the event to inspect it, bind a nested value, or freeze a DATA snapshot. Event retention is 128 references and five minutes per session. See [the 0.11 workflow guide](../REPL_WORKFLOW_0_11.md).
