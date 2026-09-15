@@ -42,7 +42,7 @@ public class SimpleNreplServer implements CommandLineRunner {
 
     private void startServer() {
         try {
-            serverSocket = new ServerSocket(port);
+            serverSocket = new ServerSocket(port, 8, java.net.InetAddress.getLoopbackAddress());
             executorService = Executors.newCachedThreadPool();
             running = true;
 

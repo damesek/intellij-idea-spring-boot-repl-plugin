@@ -1,0 +1,6 @@
+# Preserve packaged documents and the Gradle wrapper byte for byte.
+*.pdf binary
+*.jar binary
+
+gradlew text eol=lf
+gradlew.bat text eol=crlf whitespace=cr-at-eol

@@ -1,3 +1,5 @@
+> Archived experiment. This code is excluded from the supported build and does not implement the authenticated 0.9 protocol. Use the bundled agent and optional bridge described in [the main README](../README.md). The examples below are historical.
+
 # REPL használati példák Spring Boot környezetben
 
 Ez a dokumentum bemutatja, hogy hogyan használhatod az nREPL-t a Spring Boot alkalmazásodban.

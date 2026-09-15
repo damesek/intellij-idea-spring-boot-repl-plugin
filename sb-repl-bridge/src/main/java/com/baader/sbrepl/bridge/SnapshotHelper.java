@@ -1,69 +1,56 @@
 package com.baader.sbrepl.bridge;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.lang.reflect.InvocationTargetException;
 
-import java.lang.reflect.Method;
-
-/**
- * Lightweight wrapper around the dev-runtime SnapshotManager so Spring-side
- * code can save/load snapshots without dealing with reflection.
- */
+/** Uses one canonical repository. Failures are explicit and late attachment is supported. */
 public final class SnapshotHelper {
-
-    private static final Logger log = LoggerFactory.getLogger(SnapshotHelper.class);
-    private static final Method STORE_PIN = resolve("com.baader.devrt.SnapshotStore", "pin", String.class, Object.class);
-    private static final Method STORE_GET = resolve("com.baader.devrt.SnapshotStore", "get", String.class);
-    private static final Method MANAGER_SAVE = resolve("com.baader.devrt.SnapshotManager", "save", String.class, Object.class);
-    private static final Method MANAGER_LOAD = resolve("com.baader.devrt.SnapshotManager", "load", String.class);
-
     private SnapshotHelper() {}
-
-    public static void save(String name, Object value) {
-        boolean stored = invokeVoid(STORE_PIN, name, value);
-        boolean persisted = invokeVoid(MANAGER_SAVE, name, value);
-        if (!stored && !persisted) {
-            log.warn("Snapshot '{}' could not be saved (store/manager unavailable)", name);
-        }
-    }
-
+    public static void pin(String name, Object value) { invoke("pin", new Class<?>[]{String.class, Object.class}, name, value); }
+    public static void save(String name, Object value) { invoke("save", new Class<?>[]{String.class, Object.class}, name, value); }
+    public static void save(String name, Object value, String declaredType) { invoke("save", new Class<?>[]{String.class, Object.class, String.class}, name, value, declaredType); }
     @SuppressWarnings("unchecked")
-    public static <T> T load(String name) {
-        Object fromStore = invoke(STORE_GET, name);
-        if (fromStore != null) {
-            return (T) fromStore;
-        }
-        return (T) invoke(MANAGER_LOAD, name);
-    }
-
-    private static Object invoke(Method method, Object... args) {
-        if (method == null) return null;
+    public static <T> T load(String name) { return (T) invoke("load", new Class<?>[]{String.class}, name); }
+    public static void delete(String name) { invoke("delete", new Class<?>[]{String.class}, name); }
+    /** Publish a live value to explicitly subscribed REPL sessions. No serialization or disk write. */
+    public static boolean tap(String label, Object value) {
         try {
-            return method.invoke(null, args);
-        } catch (Exception e) {
-            log.warn("Snapshot operation failed via method {}", method.getName(), e);
-            return null;
-        }
+            return Boolean.TRUE.equals(Class.forName("com.baader.devrt.RuntimeEvents", true, ClassLoader.getSystemClassLoader())
+                    .getMethod("tap", String.class, Object.class).invoke(null, label, value));
+        } catch (ReflectiveOperationException absentAgent) { return false; }
     }
-
-    private static boolean invokeVoid(Method method, Object... args) {
-        if (method == null) return false;
+    /** Capture only the next armed matching call. An absent agent or unarmed trigger returns false. */
+    public static boolean capture(String point, Object value) { return capture(point, "", value); }
+    public static boolean capture(String point, String caseId, Object value) { return captureLazy(point, caseId, () -> value); }
+    /** Explicit tenant/flag/request metadata. Secrets with recognized field names are redacted by the agent. */
+    public static boolean captureLazy(String point, String caseId, java.util.function.Supplier<?> value, java.util.Map<String,String> metadata) {
         try {
-            method.invoke(null, args);
-            return true;
-        } catch (Exception e) {
-            log.warn("Snapshot operation failed via method {}", method.getName(), e);
+            return Boolean.TRUE.equals(Class.forName("com.baader.devrt.SnapshotManager", true, ClassLoader.getSystemClassLoader())
+                    .getMethod("capture", String.class, String.class, java.util.function.Supplier.class, java.util.Map.class).invoke(null, point, caseId, value, metadata));
+        } catch (InvocationTargetException failure) {
+            if (failure.getCause() instanceof Error error) throw error;
             return false;
-        }
+        } catch (ReflectiveOperationException absentAgent) { return false; }
     }
-
-    private static Method resolve(String className, String method, Class<?>... types) {
+    /** The supplier is invoked synchronously, once, only after the capture slot is claimed. */
+    public static boolean captureLazy(String point, String caseId, java.util.function.Supplier<?> value) {
         try {
-            Class<?> clazz = Class.forName(className);
-            return clazz.getMethod(method, types);
-        } catch (Exception e) {
-            log.warn("{}#{} not available", className, method, e);
-            return null;
+            return Boolean.TRUE.equals(Class.forName("com.baader.devrt.SnapshotManager", true, ClassLoader.getSystemClassLoader())
+                    .getMethod("capture", String.class, String.class, java.util.function.Supplier.class).invoke(null, point, caseId, value));
+        } catch (ClassNotFoundException | NoSuchMethodException absentAgent) { return false; }
+        catch (InvocationTargetException failure) {
+            if (failure.getCause() instanceof Error error) throw error;
+            return false;
+        } catch (ReflectiveOperationException failure) { return false; }
+    }
+    private static Object invoke(String method, Class<?>[] signature, Object... args) {
+        try {
+            return Class.forName("com.baader.devrt.SnapshotManager", true, ClassLoader.getSystemClassLoader())
+                .getMethod(method, signature).invoke(null, args);
+        } catch (InvocationTargetException failure) {
+            if (failure.getCause() instanceof RuntimeException exception) throw exception;
+            throw new IllegalStateException("Snapshot operation failed", failure.getCause());
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("Matching sb-repl agent is not available; attach it first", failure);
         }
     }
 }

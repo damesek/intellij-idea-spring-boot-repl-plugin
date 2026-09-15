@@ -1,3 +1,5 @@
+> Archived experiment. This code is excluded from the supported build and does not implement the authenticated 0.9 protocol. Use the bundled agent and optional bridge described in [the main README](../README.md). The examples below are historical.
+
 # Spring Boot nREPL Integration
 
 Ez a mappa tartalmazza a szükséges Java osztályokat, amiket a Spring Boot projektedhez kell adnod, hogy nREPL szerver fusson benne Java kód kiértékeléssel.

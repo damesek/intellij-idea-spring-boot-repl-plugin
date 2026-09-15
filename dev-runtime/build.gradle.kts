@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.8.0"
+version = "0.20.0"
 
 repositories {
     mavenCentral()
@@ -16,25 +16,48 @@ java {
 }
 
 dependencies {
-    compileOnly("org.springframework:spring-context:6.0.13")
-    compileOnly("org.slf4j:slf4j-api:2.0.9")
+    implementation(project(":repl-protocol"))
 
     // Add Byte Buddy for bytecode manipulation
     implementation("net.bytebuddy:byte-buddy:1.14.9")
     implementation("net.bytebuddy:byte-buddy-agent:1.14.9")
 
+    testImplementation(project(":sb-repl-bridge"))
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.springframework.boot:spring-boot-starter:3.5.6")
+    testImplementation("org.springframework:spring-jdbc:6.2.11")
+    testImplementation("com.h2database:h2:2.3.232")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.15.3")
+    testImplementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3")
+    testImplementation("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.springframework.boot:spring-boot-starter-test:3.5.6")
+    testRuntimeOnly("org.springframework.boot:spring-boot-loader:3.5.6")
 }
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("sb.repl.audit.dir", layout.buildDirectory.dir("test-audit").get().asFile.absolutePath)
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(providers.gradleProperty("testJdk").getOrElse("17").toInt()))
+    })
+    dependsOn(tasks.jar)
+    systemProperty("sb.repl.agentJar", tasks.jar.get().archiveFile.get().asFile.absolutePath)
 }
 
 tasks.jar {
+    dependsOn(":repl-protocol:jar")
+    from({ zipTree(project(":repl-protocol").tasks.named<Jar>("jar").get().archiveFile.get().asFile) }) {
+        exclude("META-INF/MANIFEST.MF")
+    }
+    // Instrumentation dependencies are loaded by an isolated loader, not the application's loader.
+    into("agent-libs") {
+        from(configurations.runtimeClasspath.map { files -> files.filter { it.name.startsWith("byte-buddy-") } })
+    }
     manifest {
         attributes(
             mapOf(
+                "SB-Repl-Protocol" to "1",
                 "Premain-Class" to "com.baader.devrt.Agent",
                 "Agent-Class" to "com.baader.devrt.Agent",
                 "Can-Redefine-Classes" to "true",
@@ -43,4 +66,9 @@ tasks.jar {
         )
     }
     archiveBaseName.set("dev-runtime-agent")
+}
+
+// Ship the portable assertion source for ordinary JUnit exports.
+tasks.processResources {
+    from("src/main/java/com/baader/devrt/CaseAssertions.java") { into("case-export") }
 }

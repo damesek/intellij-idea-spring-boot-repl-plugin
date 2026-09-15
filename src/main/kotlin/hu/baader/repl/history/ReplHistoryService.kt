@@ -18,17 +18,17 @@ class ReplHistoryService(private val project: Project) : PersistentStateComponen
     private var state = State()
     private val maxEntries = 200
 
-    override fun getState(): State = state
+    override fun getState(): State = if (hu.baader.repl.settings.PluginSettingsState.getInstance().state.persistHistory) State(state.entries.toMutableList()) else State()
 
     override fun loadState(state: State) {
-        this.state = state
+        this.state = State(state.entries.takeLast(maxEntries).map { hu.baader.repl.protocol.SensitiveValues.redact(it).take(16000) }.toMutableList())
     }
 
-    fun entries(): MutableList<String> = state.entries
+    fun entries(): List<String> = state.entries.toList()
 
     fun add(entry: String) {
         if (entry.isBlank()) return
-        state.entries.add(entry)
+        state.entries.add(hu.baader.repl.protocol.SensitiveValues.redact(entry).take(16000))
         if (state.entries.size > maxEntries) {
             state.entries.removeAt(0)
         }
@@ -42,4 +42,3 @@ class ReplHistoryService(private val project: Project) : PersistentStateComponen
         @JvmStatic fun getInstance(project: Project): ReplHistoryService = project.service()
     }
 }
-

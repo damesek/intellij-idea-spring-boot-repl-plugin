@@ -13,7 +13,6 @@ class SyncImportsFromEditorAction : AnAction("Sync Imports") {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project: Project = e.project ?: return
-        val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val psiFile = e.getData(CommonDataKeys.PSI_FILE)
 
         if (psiFile !is PsiJavaFile) {

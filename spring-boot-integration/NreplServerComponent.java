@@ -25,7 +25,7 @@ public class NreplServerComponent implements CommandLineRunner, ApplicationConte
     @Value("${nrepl.host:127.0.0.1}")
     private String host;
 
-    @Value("${nrepl.enabled:true}")
+    @Value("${nrepl.enabled:false}")
     private boolean enabled;
 
     private volatile Server server;

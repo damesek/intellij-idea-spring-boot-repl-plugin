@@ -24,7 +24,7 @@ class BindSpringContextAction : AnAction("Bind Spring Context", "Connect to Spri
             "Optional: custom Java expression to obtain ApplicationContext (leave empty for auto):",
             "Bind Spring Context",
             null
-        )?.trim()
+        )?.trim() ?: return
 
         if (!expr.isNullOrBlank()) {
             svc.bindSpring(expr, onResult = { v ->

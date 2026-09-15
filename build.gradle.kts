@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.8.0"
+version = "0.20.0"
 
 repositories {
     mavenCentral()
@@ -18,18 +18,27 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":repl-protocol"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(project(":dev-runtime"))
+    // MCP integration tests exercise a real Spring context and DATA snapshots, without bundling them in the plugin.
+    testImplementation("org.springframework.boot:spring-boot-starter:3.5.6")
+    testRuntimeOnly("com.fasterxml.jackson.core:jackson-databind:2.15.3")
     intellijPlatform {
+        // Compile against the oldest supported IDE; verify newer IDEs below.
         intellijIdeaCommunity("2024.1.4")
         bundledPlugin("com.intellij.java")
+        testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
         instrumentationTools()
+        pluginVerifier()
     }
 }
 
 // Bundle the dev-runtime agent into the plugin for zero-config attach.
 val bundledAgentDir = layout.buildDirectory.dir("generated/bundledAgent")
 val copyDevRuntimeAgent = tasks.register<Copy>("copyDevRuntimeAgent") {
-    dependsOn(project(":dev-runtime").tasks.named<Jar>("jar"))
-    from(project(":dev-runtime").tasks.named<Jar>("jar").map { it.archiveFile }) {
+    dependsOn(":dev-runtime:jar")
+    from({ project(":dev-runtime").tasks.named<Jar>("jar").get().archiveFile.get().asFile }) {
         into("agent")
         rename { "dev-runtime-agent.jar" }
     }
@@ -59,42 +68,77 @@ intellijPlatform {
     pluginConfiguration {
         name = "Spring Boot REPL"
         id = "hu.baader.java-over-nrepl"
-        version = "0.8.0"
+        version = project.version.toString()
         vendor {
             name = "Baader"
         }
         description = """
-            Spring Boot REPL for IntelliJ IDEA.
-            Features:
-            - Attach a lightweight dev-runtime agent to a running Spring Boot JVM
-            - JShell-based Java REPL with stateful imports and variables
-            - Automatic Spring context binding and ctx helper
-            - Hot-swap support for editing and reloading classes
-            - Editor actions for Run Selection, Evaluate at Caret, Reload Class, Sync Imports
-            - Optional HTTP panel for managing and replaying REST calls
-            
-            Getting started:
-            1. Create a Spring Boot REPL run configuration and point it to your Spring Boot main class (no extra dependencies required).
-            2. Run the configuration; the bundled dev-runtime agent attaches automatically and starts an in-process nREPL server.
-            3. Open the Spring Boot REPL tool window; the plugin auto-connects and binds Spring context so 'ctx' is available immediately.
-            4. Use the jREPL tab to evaluate Java against the live ctx, and the Snapshots / HTTP tabs to persist values and exercise REST endpoints.
+            Java REPL for a running Spring Boot application.
+            Enable Spring Boot REPL in an existing Spring Boot or Java Application run configuration.
+            The bundled agent starts on loopback, publishes a private endpoint and binds the ready Spring context.
+            Evaluate Java snippets with persistent imports and definitions; inspect real values and use LIVE, DATA or RECIPE snapshots.
+            Workbook saving never executes code. HTTP and reviewed AI requests are optional.
         """.trimIndent()
 
         ideaVersion {
-            sinceBuild = "241.0"
-            untilBuild = "252.*"  // Support up to 2025.2
+            sinceBuild = providers.gradleProperty("pluginSinceBuild")
+            untilBuild = providers.gradleProperty("pluginUntilBuild")
         }
     }
 }
 
-// Disable bundled Gradle plugin in the Development IDE to avoid GradleJvmSupportMatrix errors
-// in network-restricted environments or with nonstandard JDKs.
-tasks.named("runIde").configure {
-    (this as org.gradle.api.tasks.JavaExec).apply {
-        val current = jvmArgs ?: listOf()
-        // Disable Gradle plugin in sandbox IDE to avoid GradleJvmSupportMatrix errors
-        jvmArgs = current + listOf(
-            "-Didea.plugins.disabled=com.intellij.gradle,org.jetbrains.plugins.gradle"
+// A user-triggered buildPlugin includes the regression suite.
+tasks.named("check") {
+    dependsOn(":dev-runtime:check", ":repl-protocol:check", ":sb-repl-bridge:check")
+}
+tasks.named("buildPlugin") { dependsOn(tasks.named("check")) }
+val testJavaLauncher = javaToolchains.launcherFor {
+    languageVersion.set(JavaLanguageVersion.of(providers.gradleProperty("testJdk").getOrElse("17").toInt()))
+}
+val jshellIntegrationTests = listOf(
+    "hu/baader/repl/editor/ReplCellsTest.class",
+    "hu/baader/repl/editor/SnapshotPointExpressionTest.class",
+    "hu/baader/repl/ui/HttpSnippetBuilderTest.class",
+    "hu/baader/repl/mcp/McpIntegrationTest.class"
+)
+// JShell runs in the application's ordinary JVM. IDEA's PathClassLoader hides
+// its JDK compiler service, so exercise these integrations in a separate worker.
+val jshellIntegrationTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Tests plugin-to-runtime integration with the full JDK compiler."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath + sourceSets.test.get().compileClasspath
+    include(jshellIntegrationTests)
+    systemProperty("java.awt.headless", "true")
+    systemProperty("sb.repl.audit.dir", layout.buildDirectory.dir("test-audit").get().asFile.absolutePath)
+    maxHeapSize = "512m"
+    javaLauncher.set(testJavaLauncher)
+}
+tasks.test {
+    dependsOn(jshellIntegrationTest)
+    exclude(jshellIntegrationTests)
+    systemProperty("java.awt.headless", "true")
+    systemProperty("sb.repl.audit.dir", layout.buildDirectory.dir("test-audit").get().asFile.absolutePath)
+    systemProperty("sb.repl.uiRenderDir", layout.buildDirectory.dir("ui-safety").get().asFile.absolutePath)
+    javaLauncher.set(testJavaLauncher)
+}
+
+intellijPlatform {
+    pluginVerification {
+        val verifyPreviousIdes = providers.gradleProperty("verifyPreviousIdes").getOrElse("false").toBoolean()
+        verificationReportsDirectory = layout.buildDirectory.dir(
+            "reports/pluginVerifier/" + if (verifyPreviousIdes) "previous" else "2025.2"
         )
+        ides {
+            // Separate runs avoid Gradle resolving two versions of the same
+            // product dependency to only the newest SDK in this tooling version.
+            if (verifyPreviousIdes) {
+                ide("IC", "2024.1.4")
+                ide("IU", "2025.1.7")
+            } else {
+                ide("IC", "2025.2")
+                ide("IU", "2025.2")
+            }
+        }
     }
 }

@@ -4,36 +4,26 @@
     <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
     
     <description><![CDATA[
-      <b>Spring Boot REPL for IntelliJ IDEA</b><br/>
-      Evaluate Java code against a live Spring Boot application via an in-process dev-runtime agent,
-      with JShell-based jREPL, JavaCodeEvaluator-based jEval, snapshots, HTTP helpers and automatic Spring context binding.
-      <br/><br/>
-      <b>Key features</b>
-      <ul>
-        <li>Zero-config Spring Boot REPL run configuration (no extra dependencies or @ComponentScan needed)</li>
-        <li>Bundled dev-runtime agent attached automatically via <code>-javaagent</code></li>
-        <li>JShell-based <code>jREPL</code> (stateful imports &amp; defs) and <code>jEval</code> (JavaCodeEvaluator) modes</li>
-        <li>Automatic Spring context binding with a pre-initialized <code>ctx</code> helper in the JShell session</li>
-        <li>Hot-swap support for editing and reloading classes on the fly</li>
-        <li>Snapshots &amp; Loaded Variables panel for capturing and reusing state</li>
-        <li>HTTP panel for managing and replaying REST calls</li>
-        <li>Editor actions: Run Selection, Evaluate at Caret, Reload Class, Sync Imports, Insert Bean Getter</li>
-      </ul>
-      <br/>
-      <b>Quick usage (v0.8.0)</b>
-      <ol>
-        <li>Create a <b>Spring Boot REPL</b> run configuration and set the main class to your Spring Boot application.</li>
-        <li>Run the configuration; the bundled dev-runtime agent attaches automatically and starts an in-process nREPL server.</li>
-        <li>Open the <b>Spring Boot REPL</b> tool window; the plugin auto-connects and binds the Spring context so <code>ctx</code> is immediately available in jREPL.</li>
-        <li>Evaluate snippets such as <code>ctx.getBean(com.example.AIService.class).generateResponse("Hello")</code> directly against the live app.</li>
-        <li>Use the editor Spring Boot REPL menu (Run Selection, jEval, Reload Class, Sync Imports) to drive the REPL from your source files.</li>
-      </ol>
+      <b>Spring Boot REPL</b><br/>
+      Enable the REPL in your existing Spring Boot or Java Application run configuration.
+      Keep its profiles, environment and program arguments. The bundled agent connects through a private local endpoint.<br/>
+      A single Java/JShell session preserves imports and definitions, exposes the ready Spring context as <code>ctx</code>,
+      and offers a workbook, completion, result inspection and variables.<br/>
+      LIVE pins retain session references; DATA snapshots persist typed JSON; RECIPE snapshots store code for explicit reuse.
+      Saving a workbook or snapshot does not rerun its expressions.<br/>
+      Optional HTTP requests and reviewed AI prompts use IDE PasswordSafe for credentials.
+      Start a local MCP server from the MCP tab to give AI clients separate REPL sessions,
+      with code analysis, evaluation, object inspection and snapshot tools. Java execution and HotSwap are configurable.
     ]]></description>
     
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+    <!-- Ensure Java plugin classes (ApplicationConfiguration, JavaFileType, etc.) are available -->
+    <depends>com.intellij.java</depends>
     
     <extensions defaultExtensionNs="com.intellij">
+        <completion.confidence language="JAVA" implementationClass="hu.baader.repl.editor.ReplCompletionConfidence" order="first"/>
+        <xdebugger.breakpointType implementation="hu.baader.repl.debug.SnapshotBreakpointType"/>
         <!-- Tool Window -->
         <toolWindow id="Spring Boot REPL"
                     factoryClass="hu.baader.repl.ui.JavaReplToolWindowFactory"
@@ -50,13 +40,13 @@
 
         <!-- Notification Group -->
         <notificationGroup id="Spring Boot REPL"
-                          displayType="BALLOON"/>
+                           displayType="BALLOON"/>
 
-        <!-- Project Service for HTTP request cases -->
-        <projectService serviceImplementation="hu.baader.repl.ui.HttpRequestService"/>
-
-        <!-- Run Configuration Type -->
+        <!-- Run Configuration Type (dedicated REPL run config) -->
         <configurationType implementation="hu.baader.repl.runner.SpringBootReplConfigurationType"/>
+
+        <!-- Run Configuration Extension (Spring Boot / Application run configs) -->
+        <runConfigurationExtension implementation="hu.baader.repl.runner.SpringBootReplRunConfigurationExtension"/>
     </extensions>
     
     <actions>
@@ -68,11 +58,16 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
 
+        <action id="hu.baader.repl.SnapshotPoint" class="hu.baader.repl.actions.SnapshotPointAction"
+                text="Snapshot point…" description="Save a local value as DATA when Debug execution reaches this line">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="first"/>
+            <add-to-group group-id="EditorGutterPopupMenu" anchor="last"/>
+        </action>
         <!-- Run Selection -->
         <action id="hu.baader.repl.RunEditorSelection"
                 class="hu.baader.repl.actions.RunEditorSelectionAction"
                 text="Run Selection"
-                description="Send selection (or whole file) to Spring REPL">
+                description="Send selected Java snippets to Spring REPL">
             <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
             <keyboard-shortcut first-keystroke="ctrl shift R" keymap="$default"/>
         </action>
@@ -90,7 +85,7 @@
         <action id="hu.baader.repl.OpenAdvancedEditor"
                 class="hu.baader.repl.actions.OpenAdvancedEditorAction"
                 text="Advanced Editor"
-                description="Open advanced Java editor with session PSI and transcript">
+                description="Open the Java REPL workbook">
             <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
         </action>
 
@@ -119,6 +114,18 @@
         </action>
 
         <!-- Reload Class from Editor -->
+        <action id="hu.baader.repl.TraceMethod"
+                class="hu.baader.repl.actions.TraceMethodAction"
+                text="Trace Method"
+                description="Trace this application's method arguments and results in Tap / Trace">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+        </action>
+        <action id="hu.baader.repl.RecordClassCalls"
+                class="hu.baader.repl.actions.RecordClassCallsAction"
+                text="Record Class Calls…"
+                description="Record method inputs, results and a call graph beside this class's source">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+        </action>
         <action id="hu.baader.repl.ReloadClassFromEditor"
                 class="hu.baader.repl.actions.ReloadClassFromEditorAction"
                 text="Reload Class"
@@ -126,5 +133,55 @@
             <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
             <keyboard-shortcut first-keystroke="meta shift R" keymap="$default"/>
         </action>
+        <action id="hu.baader.repl.OpenHelp"
+                class="hu.baader.repl.actions.OpenReplHelpAction"
+                text="Help (PDF)"
+                description="Open the offline Hungarian guide with features, shortcuts and examples">
+            <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
+        </action>
+
+        <!-- Shared workbench actions: toolbar, Find Action and Keymap. -->
+        <action id="hu.baader.repl.workbench.Connect" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Connect" icon="AllIcons.Actions.Resume"/>
+        <action id="hu.baader.repl.workbench.OpenEndpoint" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Open endpoint"/>
+        <action id="hu.baader.repl.workbench.Disconnect" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Disconnect"/>
+        <action id="hu.baader.repl.workbench.Bind" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Bind"/>
+        <action id="hu.baader.repl.workbench.RunCell" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run cell / selection" icon="AllIcons.Actions.Execute"/>
+        <action id="hu.baader.repl.workbench.RunNext" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run + next"/>
+        <action id="hu.baader.repl.workbench.RunAll" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run all"/>
+        <action id="hu.baader.repl.workbench.Interrupt" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Interrupt" icon="AllIcons.Actions.Suspend"/>
+        <action id="hu.baader.repl.workbench.Reset" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Reset"/>
+        <action id="hu.baader.repl.workbench.Complete" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Complete"/>
+        <action id="hu.baader.repl.workbench.LiveCheck" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Toggle live check"/>
+        <action id="hu.baader.repl.workbench.Check" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Check code"/>
+        <action id="hu.baader.repl.workbench.Help" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Help (PDF)"/>
+        <action id="hu.baader.repl.workbench.MCP" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: MCP"/>
+        <action id="hu.baader.repl.workbench.RunAbove" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run above"/>
+        <action id="hu.baader.repl.workbench.RunFrom" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run from here"/>
+        <action id="hu.baader.repl.workbench.RunAffected" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Run affected"/>
+        <action id="hu.baader.repl.workbench.RestartAll" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Restart + run all"/>
+        <action id="hu.baader.repl.workbench.Analyze" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Analyze dependencies"/>
+        <action id="hu.baader.repl.workbench.SaveWorkspace" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Save workspace" icon="AllIcons.Actions.MenuSaveall"/>
+        <action id="hu.baader.repl.workbench.OpenWorkspace" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Open workspace"/>
+        <action id="hu.baader.repl.workbench.WorkspaceInfo" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Workspace info"/>
+        <action id="hu.baader.repl.workbench.RestoreData" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Restore DATA binding"/>
+        <action id="hu.baader.repl.workbench.SavedImports" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Insert saved imports"/>
+        <action id="hu.baader.repl.workbench.InsertCell" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Insert cell"/>
+        <action id="hu.baader.repl.workbench.OpenWorkbook" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Open workbook"/>
+        <action id="hu.baader.repl.workbench.SaveWorkbook" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Save workbook"/>
+        <action id="hu.baader.repl.workbench.Recipe" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Save RECIPE"/>
+        <action id="hu.baader.repl.workbench.History" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: History"/>
+        <action id="hu.baader.repl.workbench.ClearHistory" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Clear history"/>
+        <action id="hu.baader.repl.workbench.Bean" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Insert bean"/>
+        <action id="hu.baader.repl.workbench.Imports" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Apply configured imports"/>
+        <action id="hu.baader.repl.workbench.CreateReproduction" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Create reproduction"/>
+        <action id="hu.baader.repl.workbench.ExportReproduction" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Export reproduction"/>
+        <action id="hu.baader.repl.workbench.ImportReproduction" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Import reproduction"/>
+        <action id="hu.baader.repl.workbench.ExecutionSettings" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Execution settings"/>
+        <action id="hu.baader.repl.workbench.RefreshPolicy" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Refresh execution settings"/>
+        <action id="hu.baader.repl.workbench.SideEffects" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Side-effect hints"/>
+        <action id="hu.baader.repl.workbench.Audit" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Audit events"/>
+        <action id="hu.baader.repl.workbench.InspectResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Inspect result"/>
+        <action id="hu.baader.repl.workbench.PinResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Pin LIVE"/>
+        <action id="hu.baader.repl.workbench.SaveResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Freeze DATA"/>
     </actions>
 </idea-plugin>

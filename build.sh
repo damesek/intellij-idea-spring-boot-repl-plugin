@@ -11,11 +11,11 @@ else
   if command -v gradle >/dev/null 2>&1; then
     echo "ℹ️ Gradle wrapper JAR missing. Using system Gradle."
     GRADLE_CMD="gradle"
-    echo "ℹ️ Tip: after installing JDK 17, run 'gradle wrapper --gradle-version 8.5' to enable ./gradlew"
+    echo "ℹ️ Tip: after installing JDK 17, run 'gradle wrapper --gradle-version 8.10.2' to enable ./gradlew"
   else
     echo "❌ Gradle wrapper JAR missing and no system 'gradle' found."
     echo "   Install Gradle or run: brew install gradle  (macOS)"
-    echo "   Then: gradle wrapper --gradle-version 8.5"
+    echo "   Then: gradle wrapper --gradle-version 8.10.2"
     exit 1
   fi
 fi
@@ -24,7 +24,7 @@ echo "Cleaning previous builds..."
 "$GRADLE_CMD" clean
 
 echo "Building plugin..."
-"$GRADLE_CMD" buildPlugin
+"$GRADLE_CMD" check buildPlugin verifyPlugin
 
 echo "✅ Build successful!"
 echo "📦 Plugin package(s):"

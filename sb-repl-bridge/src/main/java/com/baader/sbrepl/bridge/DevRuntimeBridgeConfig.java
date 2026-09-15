@@ -1,47 +1,33 @@
 package com.baader.sbrepl.bridge;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeansException;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.*;
+import org.springframework.context.event.ContextClosedEvent;
 
-import java.lang.reflect.Method;
-
-/**
- * Bridges the running Spring {@link ApplicationContext} into the sb-repl agent's
- * {@code com.baader.devrt.SpringContextHolder}. Once the agent attaches, beans
- * are immediately available inside the REPL without manual reflection hacks.
- */
-public class DevRuntimeBridgeConfig implements ApplicationContextAware {
-
-    private static final Logger log = LoggerFactory.getLogger(DevRuntimeBridgeConfig.class);
-    private static final String HOLDER_FQN = "com.baader.devrt.SpringContextHolder";
-    private volatile boolean applied;
-
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        if (applicationContext == null) {
-            return;
+/** Registers only a fully started context; also supports attaching the agent after startup. */
+public final class DevRuntimeBridgeConfig implements ApplicationContextAware, ApplicationListener<ApplicationEvent> {
+    private static volatile ApplicationContext ready;
+    private ApplicationContext owner;
+    @Override public void setApplicationContext(ApplicationContext context) { owner = context; }
+    public static ApplicationContext readyContext() { return ready; }
+    @Override public void onApplicationEvent(ApplicationEvent event) {
+        if (event instanceof ApplicationReadyEvent started && started.getApplicationContext() == owner) {
+            ready = owner;
+            publish("set", owner);
+        } else if (event instanceof ContextClosedEvent closed && closed.getApplicationContext() == owner) {
+            if (ready == owner) ready = null;
+            publish("clear", owner);
+            owner = null;
         }
-        if (applied) {
-            return;
-        }
-        applied = bridgeContext(applicationContext);
     }
-
-    boolean bridgeContext(ApplicationContext applicationContext) {
+    private static void publish(String method, Object context) {
         try {
-            Class<?> holder = Class.forName(HOLDER_FQN);
-            Method setter = holder.getMethod("set", Object.class);
-            setter.invoke(null, applicationContext);
-            log.info("sb-repl agent detected – Spring context bridged successfully");
-            return true;
-        } catch (ClassNotFoundException ex) {
-            log.debug("sb-repl agent not found on classpath – skipping context bridge");
-        } catch (Throwable ex) {
-            log.warn("Failed to bridge Spring context to sb-repl agent", ex);
+            Class.forName("com.baader.devrt.SpringContextHolder", false, ClassLoader.getSystemClassLoader())
+                .getMethod(method, Object.class).invoke(null, context);
+        } catch (ClassNotFoundException ignored) {
+            // Agent may be attached later; readyContext remains available to its explicit bridge lookup.
+        } catch (ReflectiveOperationException failure) {
+            org.slf4j.LoggerFactory.getLogger(DevRuntimeBridgeConfig.class).warn("REPL context bridge failed", failure);
         }
-        return false;
     }
 }

@@ -1,163 +1,83 @@
 package com.baader.devrt;
 
+import hu.baader.repl.protocol.Bencode;
+import hu.baader.repl.protocol.ReplProtocol;
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
-/**
- * Minimal bencode-based server. Manages client connections and delegates
- * all REPL logic to a dedicated ReplHandler.
- */
-public class MiniNreplServer {
-    private final int port;
-    private ServerSocket serverSocket;
-    private ExecutorService executor;
-    private final ReplHandler replHandler = new ReplHandler();
-
-    public MiniNreplServer(int port) { this.port = port; }
-
-    public void start() throws IOException {
-        serverSocket = new ServerSocket(port);
-        executor = Executors.newCachedThreadPool();
-        System.out.println("nREPL server started on port " + port);
-        Thread serverThread = new Thread(() -> {
-            while (true) { // Loop indefinitely
+public final class MiniNreplServer implements AutoCloseable {
+    private final int requestedPort;
+    private final byte[] token;
+    private volatile boolean closed;
+    private ServerSocket listener;
+    private final Set<Socket> clients = ConcurrentHashMap.newKeySet();
+    private final ExecutorService readers = Executors.newFixedThreadPool(8, runnable -> {
+        Thread thread = new Thread(runnable, "sb-repl-client"); thread.setDaemon(true); return thread;
+    });
+    public MiniNreplServer(int port, String token) {
+        if (token == null || token.length() < 32) throw new IllegalArgumentException("A random token of at least 32 characters is required");
+        this.requestedPort = port; this.token = token.getBytes(StandardCharsets.UTF_8);
+    }
+    public synchronized void start() throws IOException {
+        if (listener != null) throw new IllegalStateException("Server already started");
+        listener = new ServerSocket();
+        listener.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), requestedPort), 8);
+        Thread accept = new Thread(() -> {
+            while (!closed) try {
+                Socket socket = listener.accept();
                 try {
-                    Socket s = serverSocket.accept();
-                    executor.submit(new Client(s));
-                } catch (IOException e) {
-                    // Log error but continue running to accept next client
-                    System.err.println("[dev-runtime] Error accepting client connection: " + e.getMessage());
+                    if (closed || clients.size() >= 8) { socket.close(); continue; }
+                    socket.setTcpNoDelay(true); socket.setSoTimeout(15 * 60_000);
+                    clients.add(socket); readers.execute(() -> serve(socket));
+                } catch (IOException | RejectedExecutionException failure) {
+                    clients.remove(socket); socket.close(); throw failure;
                 }
-            }
-        });
-        serverThread.setDaemon(true);
-        serverThread.setName("dev-runtime-accept");
-        serverThread.start();
+            } catch (IOException | RejectedExecutionException exception) { if (!closed) System.err.println("[sb-repl] Connection rejected: " + exception.getMessage()); }
+        }, "sb-repl-accept");
+        accept.setDaemon(true); accept.start();
     }
-
-    class Client implements Runnable {
-        private final Socket socket;
-        private final String sessionId = UUID.randomUUID().toString();
-
-        Client(Socket socket) { this.socket = socket; }
-
-        @Override public void run() {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                 BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-                while (!socket.isClosed()) {
-                    Map<String, String> msg = readBencode(in);
-                    if (msg == null) break;
-                    handle(msg, out);
-                }
-            } catch (Exception e) {
-                // Client disconnected or other error
-            } finally { try { socket.close(); } catch (IOException ignored) {} }
-        }
-
-        private void handle(Map<String, String> msg, BufferedWriter out) throws IOException {
-            String op = msg.get("op");
-            String id = msg.get("id");
-
-            if ("clone".equals(op)) {
-                respond(Map.of("id", id, "new-session", sessionId, "status", "done"), out);
-                return;
-            }
-            if ("describe".equals(op)) {
-                // Restore full ops list for compatibility
-                respond(Map.of(
-                    "id", id,
-                    "ops", "clone,describe,eval,java-eval,imports/get,imports/add,session/reset,snapshots,snapshot/save,snapshot/get,snapshot/list,snapshot/delete,list-beans,bind-spring,class-reload",
-                    "status", "done"
-                ), out);
-                return;
-            }
-
-            // Delegate all other ops to the handler
-            Map<String, Object> result = replHandler.handle(op, msg);
-            
-            // Translate handler response to nREPL messages
-            Map<String, String> response = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : result.entrySet()) {
-                response.put(entry.getKey(), String.valueOf(entry.getValue()));
-            }
-            
-            response.put("id", id);
-            response.put("session", sessionId);
-            
-            // Send value, out, message, and err responses
-            String primaryValue = response.get("value");
-            String valuesField = response.get("values");
-            if (primaryValue != null && !primaryValue.isEmpty()) {
-                respond(Map.of("id", id, "session", sessionId, "value", primaryValue), out);
-            } else if (valuesField != null && !valuesField.equals("[]")) {
-                respond(Map.of("id", id, "session", sessionId, "value", valuesField), out);
-            }
-            String output = response.getOrDefault("output", "");
-            String message = response.getOrDefault("message", "");
-            if (!output.isEmpty() || !message.isEmpty()) {
-                String combinedOut = output + (output.isEmpty() ? "" : "\n") + message;
-                respond(Map.of("id", id, "session", sessionId, "out", combinedOut), out);
-            }
-            if (response.containsKey("err")) {
-                respond(Map.of("id", id, "session", sessionId, "err", response.get("err")), out);
-            }
-            
-            // Send final "done" status
-            respond(Map.of("id", id, "session", sessionId, "status", "done"), out);
-        }
-
-        private void respond(Map<String, String> data, BufferedWriter out) throws IOException {
-            writeBencode(data, out);
-        }
+    public int port() { return listener.getLocalPort(); }
+    boolean authenticated(Map<String, ?> message) {
+        Object candidate = message.get("token");
+        return candidate instanceof String text && MessageDigest.isEqual(token, text.getBytes(StandardCharsets.UTF_8));
     }
-
-    private static void writeBencode(Map<String, String> map, BufferedWriter out) throws IOException {
-        StringBuilder sb = new StringBuilder("d");
-        List<String> keys = new ArrayList<>(map.keySet());
-        Collections.sort(keys);
-        for (String k : keys) {
-            String v = map.get(k);
-            if (v == null) continue;
-            sb.append(k.length()).append(":").append(k);
-            sb.append(v.length()).append(":").append(v);
-        }
-        sb.append("e");
-        out.write(sb.toString());
-        out.flush();
+    private void serve(Socket socket) {
+        try (socket; ReplHandler handler = new ReplHandler()) {
+            InputStream input = new BufferedInputStream(socket.getInputStream());
+            OutputStream output = new BufferedOutputStream(socket.getOutputStream());
+            for (Map<String, Object> message; (message = Bencode.read(input)) != null;) {
+                Map<String, String> request = ReplProtocol.strings(message);
+                if (!authenticated(message)) { respond(request, ReplHandler.error("Authentication failed"), output); break; }
+                request.remove("token");
+                String op = request.getOrDefault("op", "");
+                Runnable work = () -> {
+                    try { respond(request, handler.handle(op, request), output); }
+                    catch (IOException exception) { try { socket.close(); } catch (IOException ignored) {} }
+                    finally { Thread.interrupted(); }
+                };
+                if (ReplProtocol.CONTROL_OPS.contains(op)) work.run();
+                else try { handler.submit(request.getOrDefault("session", ""), work); }
+                catch (IllegalArgumentException | RejectedExecutionException exception) { respond(request, ReplHandler.error("Session unavailable or request queue full"), output); }
+            }
+        } catch (IOException ignored) {
+            // EOF, malformed frames, timeouts and disconnects close this connection only.
+        } finally { clients.remove(socket); }
     }
-
-    private static Map<String, String> readBencode(BufferedReader in) throws IOException {
-        int firstChar = in.read();
-        if (firstChar != 'd') return null;
-        
-        Map<String, String> m = new LinkedHashMap<>();
-        while (true) {
-            int ch = in.read();
-            if (ch == -1 || ch == 'e') break;
-            
-            // Read key
-            StringBuilder lenStr = new StringBuilder();
-            lenStr.append((char)ch);
-            while ((ch = in.read()) != ':') lenStr.append((char)ch);
-            int klen = Integer.parseInt(lenStr.toString());
-            char[] kbuf = new char[klen];
-            in.read(kbuf);
-            String key = new String(kbuf);
-
-            // Read value
-            lenStr = new StringBuilder();
-            while ((ch = in.read()) != ':') lenStr.append((char)ch);
-            int vlen = Integer.parseInt(lenStr.toString());
-            char[] vbuf = new char[vlen];
-            in.read(vbuf);
-            String val = new String(vbuf);
-            
-            m.put(key, val);
-        }
-        return m;
+    static void respond(Map<String, String> request, Map<String, Object> values, OutputStream output) throws IOException {
+        Map<String, Object> response = new LinkedHashMap<>(values);
+        response.put("id", request.getOrDefault("id", ""));
+        response.put("session", request.getOrDefault("session", ""));
+        response.put("op", request.getOrDefault("op", ""));
+        Bencode.write(response, output);
+    }
+    @Override public synchronized void close() {
+        closed = true;
+        if (listener != null) try { listener.close(); } catch (IOException ignored) {}
+        for (Socket socket : clients) try { socket.close(); } catch (IOException ignored) {}
+        readers.shutdownNow();
     }
 }

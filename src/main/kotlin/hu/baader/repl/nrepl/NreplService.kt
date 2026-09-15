@@ -1,302 +1,267 @@
 package hu.baader.repl.nrepl
 
+import com.intellij.execution.process.ProcessAdapter
+import com.intellij.execution.process.ProcessEvent
+import com.intellij.execution.process.ProcessHandler
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.Disposable
+import hu.baader.repl.protocol.EndpointFile
 import hu.baader.repl.settings.PluginSettingsState
-import java.util.concurrent.atomic.AtomicBoolean
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 @Service(Service.Level.PROJECT)
-class NreplService(private val project: Project) {
-
-    private val settings get() = PluginSettingsState.getInstance().state
+class NreplService(private val project: Project) : Disposable {
+    enum class State { DISCONNECTED, CONNECTING, SESSION_READY, WAITING_CONTEXT, READY, FAILED }
+    @Volatile var state = State.DISCONNECTED
+        private set
     @Volatile private var client: NreplClient? = null
-    private val connecting = AtomicBoolean(false)
-    private val connected = AtomicBoolean(false)
-    private val springBound = AtomicBoolean(false)
-    private val supportsJshell = java.util.concurrent.atomic.AtomicBoolean(false)
-
-    private val listeners = mutableListOf<(Map<String, String>) -> Unit>()
-    @Volatile private var lastEvalSnippet: String? = null
+    @Volatile private var endpoint: Path? = null
+    @Volatile private var boundEpoch: String? = null
+    private val generation = AtomicLong()
+    private val listeners = CopyOnWriteArrayList<(Map<String, String>) -> Unit>()
+    private val snippets = ConcurrentHashMap<String, String>()
     @Volatile private var debugSink: ((String) -> Unit)? = null
+    val executionSelection = ExecutionSelection()
+    private val executions = java.util.concurrent.atomic.AtomicInteger()
+    fun isExecuting() = executions.get() > 0
+    fun canExecute() = isConnected() && executionSelection.ready
 
     fun onMessage(listener: (Map<String, String>) -> Unit): Disposable {
-        listeners += listener
-        return Disposable { listeners.remove(listener) }
+        listeners.add(listener); return Disposable { listeners.remove(listener) }
+    }
+    private fun ui(action: () -> Unit) {
+        ApplicationManager.getApplication().invokeLater { if (!project.isDisposed) action() }
+    }
+    private fun publish(message: Map<String, String>) = ui {
+        listeners.forEach { listener ->
+            try { listener(message) }
+            catch (e: com.intellij.openapi.progress.ProcessCanceledException) { throw e }
+            catch (e: Exception) { com.intellij.openapi.diagnostic.Logger.getInstance(NreplService::class.java).warn("REPL view update failed", e) }
+        }
+    }
+    private fun change(next: State, detail: String = "") {
+        state = next; publish(mapOf("op" to "connection", "state" to next.name, "detail" to detail))
+    }
+    fun isConnected() = client != null && state in setOf(State.SESSION_READY, State.WAITING_CONTEXT, State.READY)
+    fun isSpringBound() = state == State.READY
+    fun isJshellMode() = isConnected()
+
+    fun connectAsync(onComplete: ((Boolean) -> Unit)? = null) {
+        if (isConnected()) { ui { onComplete?.invoke(true) }; return }
+        val configured = PluginSettingsState.getInstance().state.endpointFile
+        val path = endpoint ?: configured.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+        if (path == null) {
+            change(State.FAILED, "Start an application with Enable Spring Boot REPL, or select an agent endpoint file in Settings.")
+            ui { onComplete?.invoke(false) }; return
+        }
+        connectEndpoint(path, { true }, onComplete)
     }
 
-    fun isConnected(): Boolean = connected.get()
-    fun isSpringBound(): Boolean = springBound.get()
-    fun isJshellMode(): Boolean = supportsJshell.get()
-
-    fun connectAsync(onComplete: ((isJshell: Boolean) -> Unit)? = null) {
-        if (connected.get() || connecting.getAndSet(true)) return
-        springBound.set(false)
-
-        val c = NreplClient(settings.host, settings.port)
-        c.onMessage { msg ->
-            debugSink?.invoke("[nREPL] $msg")
-            listeners.forEach { it(msg) }
-        }
-
-        try {
-            c.connect()
-            client = c
-            connected.set(true)
-            // Probe server capabilities and invoke the callback ONLY when done
-            c.sendOp("describe") { m ->
-                val ops = m["ops"] ?: ""
-                val has = ops.contains("imports/get") || ops.contains("session/reset")
-                supportsJshell.set(has)
-                onComplete?.invoke(has)
+    fun connectProcess(path: Path, process: ProcessHandler) {
+        connectEndpoint(path, { !process.isProcessTerminated && !process.isProcessTerminating })
+        process.addProcessListener(object : ProcessAdapter() {
+            override fun processTerminated(event: ProcessEvent) {
+                if (endpoint == path) disconnect()
+                runCatching { Files.deleteIfExists(path) }
             }
-        } catch (t: Throwable) {
-            client = null
-            connected.set(false)
-            onComplete?.invoke(false) // Ensure callback is called even on error
-            throw t
-        } finally {
-            connecting.set(false)
+        })
+        if (process.isProcessTerminated && endpoint == path) disconnect()
+    }
+
+    fun connectEndpoint(path: Path, alive: () -> Boolean = { true }, onComplete: ((Boolean) -> Unit)? = null) {
+        disconnect()
+        endpoint = path
+        val run = generation.incrementAndGet()
+        change(State.CONNECTING)
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(90)
+            var candidate: NreplClient? = null
+            var connectedCallback = false
+            try {
+                while (!Files.exists(path) || Files.size(path) == 0L) {
+                    check(generation.get() == run && alive()) { "Application stopped before its REPL became available" }
+                    check(System.nanoTime() < deadline) { "Timed out waiting for the REPL endpoint file" }
+                    Thread.sleep(150)
+                }
+                check(generation.get() == run && alive()) { "Connection cancelled" }
+                val address = EndpointFile.read(path)
+                candidate = NreplClient(java.net.InetAddress.getLoopbackAddress().hostAddress, address.port(), address.token())
+                val c = candidate
+                c.onMessage { message ->
+                    if (generation.get() != run) return@onMessage
+                    if (message["op"] == "describe" && state == State.READY && message["context-epoch"] != boundEpoch)
+                        change(State.SESSION_READY, "Spring context changed; reset the session.")
+                    if (message["op"] == "bind-spring" && message["value"] == "true") {
+                        boundEpoch = message["context-epoch"]; change(State.READY)
+                    }
+                    val snippet = message["id"]?.let { snippets.remove(it) }
+                    publish(if (snippet == null) message else message + ("snippet" to snippet))
+                    debugLog(message["op"].orEmpty() + ": " + message["status"].orEmpty())
+                }
+                c.connect(address.pid())
+                if (generation.get() != run || !alive()) { c.close(); return@executeOnPooledThread }
+                client = c
+                c.onDisconnect = { reason ->
+                    if (client === c) {
+                        client = null; snippets.clear(); executionSelection.reset(); executions.set(0)
+                        change(State.DISCONNECTED, reason)
+                    }
+                }
+                change(State.SESSION_READY)
+                refreshExecutionPolicy()
+                connectedCallback = true
+                ui { onComplete?.invoke(true) }
+                change(State.WAITING_CONTEXT)
+                while (generation.get() == run && alive() && client === c && System.nanoTime() < deadline) {
+                    val response = try {
+                        c.request("bind-spring").get(10, java.util.concurrent.TimeUnit.SECONDS)
+                    } catch (_: java.util.concurrent.TimeoutException) {
+                        if (generation.get() == run && client === c) change(State.SESSION_READY, "Spring bind is queued behind another operation; the Java REPL remains connected.")
+                        return@executeOnPooledThread
+                    }
+                    if (response["err"] == null && response["value"] == "true") {
+                        boundEpoch = response["context-epoch"]
+                        change(State.READY); return@executeOnPooledThread
+                    }
+                    Thread.sleep(500)
+                }
+                if (generation.get() == run && client === c) change(State.SESSION_READY, "Java REPL connected; Spring context is not ready. Use Bind after application startup.")
+            } catch (e: Exception) {
+                candidate?.close()
+                if (generation.get() == run) {
+                    client = null
+                    change(State.FAILED, e.cause?.message ?: e.message ?: "Connection failed")
+                    if (!connectedCallback) ui { onComplete?.invoke(false) }
+                }
+            }
         }
     }
 
     fun disconnect() {
-        client?.close()
-        client = null
-        connected.set(false)
-        springBound.set(false)
+        generation.incrementAndGet()
+        executionSelection.reset(); executions.set(0)
+        val c = client; client = null; boundEpoch = null; c?.close(); snippets.clear()
+        change(State.DISCONNECTED)
     }
-
-    fun reconnect() {
-        disconnect()
-        connectAsync()
+    fun debuggerTarget(): Pair<String, Long>? = client?.debuggerTarget()
+    data class McpTarget(val endpoint: Path, val pid: Long, val connection: Long)
+    fun mcpTarget(): McpTarget? {
+        val run = generation.get()
+        val active = client ?: return null
+        val path = endpoint ?: return null
+        val pid = active.debuggerTarget()?.second ?: return null
+        return if (isConnected() && client === active && generation.get() == run) McpTarget(path, pid, run) else null
     }
+    fun reconnect() { disconnect(); connectAsync() }
+    override fun dispose() { disconnect(); listeners.clear(); debugSink = null }
+    fun setDebugSink(sink: ((String) -> Unit)?) { debugSink = sink }
+    fun debugLog(message: String) = ui { debugSink?.invoke(message) }
 
-    fun setDebugSink(sink: ((String) -> Unit)?) {
-        debugSink = sink
-    }
-
-    fun debugLog(message: String) {
-        debugSink?.invoke(message)
-    }
-
-    fun eval(code: String, onResult: ((Map<String, String>) -> Unit)? = null, onError: ((String) -> Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        lastEvalSnippet = code
-        c.sendOp("eval", mapOf("code" to code)) { m ->
-            if (m["err"] != null) {
-                onError?.invoke(m["err"]!!)
+    fun request(op: String, extra: Map<String, String> = emptyMap(),
+                onResult: ((Map<String, String>) -> Unit)? = null, onError: ((String) -> Unit)? = null,
+                id: String = UUID.randomUUID().toString()) {
+        val c = client
+        if (c == null) {
+            snippets.remove(id)
+            ui { onError?.invoke("REPL is disconnected. Start or connect an application first.") }
+            return
+        }
+        val executes = op in setOf("eval", "java-eval", "case/run", "case/run-batch")
+        if (executes && !executionSelection.ready) {
+            snippets.remove(id)
+            ui { onError?.invoke("Execution settings are not confirmed. Wait for the mode change or use Session > Refresh execution settings.") }
+            return
+        }
+        if (executes) { executions.incrementAndGet(); publish(mapOf("op" to "activity", "running" to "true")) }
+        c.request(op, extra, id).whenComplete { response, error ->
+            if (executes && client === c) {
+                executions.updateAndGet { (it - 1).coerceAtLeast(0) }
+                publish(mapOf("op" to "activity", "running" to isExecuting().toString()))
             }
-            else {
-                onResult?.invoke(m)
+            if (error != null) {
+                snippets.remove(id)
+                ui { onError?.invoke(error.cause?.message ?: error.message ?: "Request failed") }
+            } else ui {
+                if (client !== c) return@ui
+                val failure = response["err"]
+                if (failure != null || response["status"].orEmpty().lines().contains("error")) {
+                    if (failure.orEmpty().contains("context changed", ignoreCase = true)) change(State.SESSION_READY, "Context changed: reset the session")
+                    onError?.invoke(failure ?: "Request failed")
+                } else onResult?.invoke(response)
             }
         }
     }
-
-    fun eval(code: String) {
-        eval(code, null, null)
+    fun refreshExecutionPolicy() = updateExecutionPolicy(null)
+    fun configureExecution(policy: ExecutionSelection.Policy) {
+        if (isExecuting() || executionSelection.pending) return
+        updateExecutionPolicy(policy)
     }
-
-    fun consumeLastEvalSnippet(): String? {
-        val s = lastEvalSnippet
-        lastEvalSnippet = null
-        return s
-    }
-
-    // Session ops
-    fun resetSession(onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        if (!supportsJshell.get()) { onError?.invoke("JShell session nem támogatott az agent-ben") ; return }
-        c.sendOp("session-reset") { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["reset"] != null -> onResult?.invoke("reset")
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
+    private fun updateExecutionPolicy(policy: ExecutionSelection.Policy?) {
+        if (!isConnected()) return
+        val ticket = executionSelection.begin(policy)
+        publish(mapOf("op" to "execution/selection", "pending" to "true"))
+        request(if (policy == null) "execution/policy" else "execution/configure", policy?.arguments().orEmpty(), { response ->
+            try {
+                if (executionSelection.accept(ticket, response)) publish(response + ("op" to "execution/selection"))
+            } catch (e: Exception) {
+                if (executionSelection.fail(ticket, "Invalid execution settings response: ${e.message}"))
+                    publish(mapOf("op" to "execution/selection", "err" to executionSelection.error))
             }
-        }
-    }
-
-    fun getImports(onResult: (List<String>)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        if (!supportsJshell.get()) { onError?.invoke("Imports op nem támogatott az agent-ben") ; return }
-        c.sendOp("imports-get") { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["imports"] != null -> onResult(m["imports"]!!.lines().filter { it.isNotBlank() })
-                m["value"] != null -> onResult(m["value"]!!.lines().filter { it.isNotBlank() })
-                else -> onResult(emptyList())
+        }, { message ->
+            if (executionSelection.fail(ticket, message)) {
+                publish(mapOf("op" to "execution/selection", "err" to message))
+                // A rejected/timed-out change is uncertain. Read back the actual server policy.
+                if (policy != null) refreshExecutionPolicy()
             }
-        }
+        })
     }
+    private fun value(op: String, extra: Map<String, String> = emptyMap(), ok: ((String) -> Unit)? = null, err: ((String) -> Unit)? = null) =
+        request(op, extra, { ok?.invoke(it["value"].orEmpty()) }, err)
 
-    fun addImports(imports: List<String>, onResult: (List<String>)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        if (!supportsJshell.get()) { onError?.invoke("Imports op nem támogatott az agent-ben") ; return }
-        val payload = imports.joinToString("\n")
-        c.sendOp("imports-add", mapOf("imports" to payload)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["imports"] != null -> onResult(m["imports"]!!.lines().filter { it.isNotBlank() })
-                m["value"] != null -> onResult(m["value"]!!.lines().filter { it.isNotBlank() })
-                else -> onResult(emptyList())
-            }
-        }
+    fun eval(code: String, onResult: ((Map<String, String>) -> Unit)? = null, onError: ((String) -> Unit)? = null,
+             id: String = UUID.randomUUID().toString()) {
+        snippets[id] = code
+        request("eval", mapOf("code" to code), onResult, onError, id)
     }
-
-    fun bindSpring(expr: String? = null, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val extra = mutableMapOf<String,String>()
-        if (!expr.isNullOrBlank()) extra["expr"] = expr
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("bind-spring", extra) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!) ?: Unit
-                m["value"] != null -> {
-                    val v = m["value"]!!.trim()
-                    if (v.equals("true", ignoreCase = true)) springBound.set(true)
-                    onResult?.invoke(v)
-                }
-            }
-        }
-    }
-
-    fun hotSwap(code: String, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("class-reload", mapOf("code" to code)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-                else -> onResult?.invoke("HotSwap completed")
-            }
-        }
-    }
-
-    fun listSpringBeans(onResult: (List<BeanInfo>)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("list-beans", emptyMap()) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> {
-                    val beans = m["value"]!!
-                        .lines()
-                        .mapNotNull { line ->
-                            val trimmed = line.trim()
-                            if (trimmed.isEmpty()) return@mapNotNull null
-                            val parts = trimmed.split('\t')
-                            BeanInfo(
-                                name = parts.getOrNull(0)?.trim().orEmpty(),
-                                className = parts.getOrNull(1)?.trim().orEmpty()
-                            )
-                        }
-                    onResult(beans)
-                }
-                else -> onResult(emptyList())
-            }
-        }
-    }
-
-    fun listAgentSnapshots(onResult: (String)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshots", emptyMap()) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult(m["value"]!!)
-            }
-        }
-    }
-
-    fun deleteSnapshot(name: String, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-delete", mapOf("name" to name)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    fun snapshotPin(name: String, expr: String, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-pin", mapOf("name" to name, "expr" to expr)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    fun snapshotSaveJson(name: String, expr: String, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-save-json", mapOf("name" to name, "expr" to expr)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    fun snapshotMaterialize(name: String, typeFqn: String, target: String? = null, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        val extra = mutableMapOf("name" to name, "type" to typeFqn)
-        if (!target.isNullOrBlank()) extra["target"] = target
-        c.sendOp("snapshot-materialize", extra) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    // Simplified snapshot operations
-    fun snapshotSave(name: String, expr: String, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-save", mapOf("name" to name, "expr" to expr)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    fun snapshotLoad(name: String, varName: String? = null, onResult: ((String)->Unit)? = null, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        val extra = mutableMapOf("name" to name)
-        if (!varName.isNullOrBlank()) extra["var"] = varName
-        c.sendOp("snapshot-load", extra) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult?.invoke(m["value"]!!)
-            }
-        }
-    }
-
-    fun snapshotListSimple(onResult: (List<String>)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-list-simple", emptyMap()) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> {
-                    val lines = m["value"]!!.lines().filter { it.isNotBlank() }
-                    onResult(lines)
-                }
-            }
-        }
-    }
-
-    fun snapshotInfo(name: String, onResult: (String)->Unit, onError: ((String)->Unit)? = null) {
-        val c = client ?: throw IllegalStateException("Not connected to nREPL")
-        c.sendOp("snapshot-info", mapOf("name" to name)) { m ->
-            when {
-                m["err"] != null -> onError?.invoke(m["err"]!!)
-                m["value"] != null -> onResult(m["value"]!!)
-            }
-        }
-    }
-
+    fun interrupt(onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = value("interrupt", ok = onResult, err = onError)
+    fun resetSession(onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) =
+        request("session/reset", onResult = {
+            boundEpoch = it["context-epoch"]
+            change(if (it["context-ready"] == "true") State.READY else State.SESSION_READY)
+            onResult?.invoke(it["value"].orEmpty())
+        }, onError = onError)
+    fun bindSpring(expr: String? = null, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) =
+        request("bind-spring", if (expr.isNullOrBlank()) emptyMap() else mapOf("expr" to expr), {
+            if (it["value"] == "true") { boundEpoch = it["context-epoch"]; change(State.READY) }
+            onResult?.invoke(it["value"].orEmpty())
+        }, onError)
+    fun getImports(onResult: (List<String>) -> Unit, onError: ((String) -> Unit)? = null) =
+        request("imports/get", onResult = { onResult(it["imports"].orEmpty().lines().filter(String::isNotBlank)) }, onError = onError)
+    fun addImports(imports: List<String>, onResult: (List<String>) -> Unit, onError: ((String) -> Unit)? = null) =
+        request("imports/add", mapOf("imports" to imports.joinToString("\n")), { onResult(it["imports"].orEmpty().lines().filter(String::isNotBlank)) }, onError)
+    fun hotSwap(code: String, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = value("class-reload", mapOf("code" to code), onResult, onError)
+    fun listSpringBeans(onResult: (List<BeanInfo>) -> Unit, onError: ((String) -> Unit)? = null) =
+        value("list-beans", ok = { text -> onResult(text.lines().filter(String::isNotBlank).map { val p = it.split('\t'); BeanInfo(p[0], p.getOrElse(1) { "" }) }) }, err = onError)
+    fun listAgentSnapshots(onResult: (String) -> Unit, onError: ((String) -> Unit)? = null) = value("snapshot/list", ok = onResult, err = onError)
+    fun snapshotListSimple(onResult: (List<String>) -> Unit, onError: ((String) -> Unit)? = null) =
+        listAgentSnapshots({ onResult(it.lines().filter(String::isNotBlank)) }, onError)
+    fun deleteSnapshot(name: String, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = value("snapshot/delete", mapOf("name" to name), onResult, onError)
+    fun snapshotInfo(name: String, onResult: (String) -> Unit, onError: ((String) -> Unit)? = null) = value("snapshot/info", mapOf("name" to name), onResult, onError)
+    fun snapshotPin(name: String, expr: String, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = value("snapshot/pin", mapOf("name" to name, "expr" to expr), onResult, onError)
+    fun snapshotSave(name: String, expr: String, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = value("snapshot/save", mapOf("name" to name, "expr" to expr), onResult, onError)
+    fun snapshotSaveJson(name: String, expr: String, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) = snapshotSave(name, expr, onResult, onError)
+    fun snapshotLoad(name: String, varName: String? = null, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) =
+        value("snapshot/load", mapOf("name" to name, "var" to (varName ?: "restored")), onResult, onError)
+    fun snapshotMaterialize(name: String, typeFqn: String, target: String? = null, onResult: ((String) -> Unit)? = null, onError: ((String) -> Unit)? = null) =
+        value("snapshot/load", mapOf("name" to name, "type" to typeFqn, "var" to (target ?: "restored")), onResult, onError)
     data class BeanInfo(val name: String, val className: String)
-
-    companion object {
-        @JvmStatic
-        fun getInstance(project: Project): NreplService = project.service()
-    }
+    companion object { @JvmStatic fun getInstance(project: Project): NreplService = project.service() }
 }

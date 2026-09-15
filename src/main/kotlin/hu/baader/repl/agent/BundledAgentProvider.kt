@@ -16,6 +16,7 @@ object BundledAgentProvider {
     @Volatile
     private var cachedPath: String? = null
 
+    @Synchronized
     fun getBundledAgentJar(): String? {
         cachedPath?.let { if (File(it).exists()) return it }
         return try {

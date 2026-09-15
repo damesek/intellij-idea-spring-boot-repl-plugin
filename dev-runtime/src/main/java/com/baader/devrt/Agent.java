@@ -1,99 +1,103 @@
 package com.baader.devrt;
 
-import net.bytebuddy.agent.builder.AgentBuilder;
-
-import java.io.File;
-import java.io.IOException;
+import hu.baader.repl.protocol.EndpointFile;
+import java.io.*;
 import java.lang.instrument.Instrumentation;
-import java.net.URISyntaxException;
-import java.security.CodeSource;
-import java.util.jar.JarFile;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.jar.*;
 
-public class Agent {
-    public static void premain(String agentArgs, Instrumentation inst) {
-        setup(agentArgs, inst);
-    }
+/** Minimal bootstrap: optional instrumentation failures must never abort the application's main. */
+public final class Agent {
+    private static MiniNreplServer server;
+    private static URLClassLoader instrumentationLoader;
+    private static Path endpoint;
+    private static EndpointFile.Endpoint address;
+    private static final Set<Path> endpointFiles = new HashSet<>();
+    public static void premain(String args, Instrumentation instrumentation) { start(args, instrumentation); }
+    public static void agentmain(String args, Instrumentation instrumentation) { start(args, instrumentation); }
 
-    public static void agentmain(String agentArgs, Instrumentation inst) {
-        setup(agentArgs, inst);
-    }
-
-    private static void setup(String agentArgs, Instrumentation inst) {
-        AgentRuntime.setInstrumentation(inst);
-
-        File agentJarFile = getAgentJarFile();
-        if (agentJarFile == null) {
-            System.err.println("[dev-runtime] Could not determine agent JAR location. Context auto-binding will fail.");
-            startNreplServer(agentArgs); // Start server anyway
-            return;
-        }
-        System.out.println("[dev-runtime] Agent JAR located at: " + agentJarFile.getAbsolutePath());
-
-        // Strategy 1: Make agent classes available to the system.
-        // This is crucial for the manual "Bind" action via JShell to find AutoBinder.
+    private static synchronized void start(String args, Instrumentation instrumentation) {
         try {
-            inst.appendToSystemClassLoaderSearch(new JarFile(agentJarFile));
-            System.out.println("[dev-runtime] Agent JAR added to system class path.");
-        } catch (IOException e) {
-            System.err.println("[dev-runtime] Failed to add agent JAR to system class path.");
-        }
-
-        // Strategy 2: Use InjectionStrategy for the transformer.
-        // This is more robust for the transformation process itself.
-        System.out.println("[dev-runtime] Installing context transformer with injection strategy...");
-        new AgentBuilder.Default()
-                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                .with(new AgentBuilder.InjectionStrategy.UsingInstrumentation(inst, agentJarFile))
-                .with(new Slf4jAgentBuilderListener()) // Use SLF4J for logging
-                .type(ContextCapturingTransformer.MATCHER)
-                .transform(ContextCapturingTransformer.TRANSFORMER)
-                .installOn(inst);
-        System.out.println("[dev-runtime] Transformer installed.");
-
-        // Start background auto-bind attempts (ContextLoader, LiveBeansView, static scan, JMX).
-        AutoBinder.scheduleAutoBind();
-
-        // Start the nREPL server
-        startNreplServer(agentArgs);
-    }
-
-    private static File getAgentJarFile() {
-        try {
-            CodeSource codeSource = Agent.class.getProtectionDomain().getCodeSource();
-            if (codeSource != null) {
-                return new File(codeSource.getLocation().toURI().getSchemeSpecificPart());
+            AgentRuntime.setInstrumentation(instrumentation);
+            Map<String, String> options = new HashMap<>();
+            if (args != null) for (String part : args.split(",")) {
+                String[] pair = part.split("=", 2);
+                if (pair.length == 2) options.put(pair[0], pair[1]);
             }
-        } catch (URISyntaxException e) {
-            System.err.println("[dev-runtime] Failed to get agent JAR location.");
-            e.printStackTrace();
+            Path requested = options.containsKey("endpoint64") ? Path.of(new String(Base64.getUrlDecoder().decode(options.get("endpoint64")), java.nio.charset.StandardCharsets.UTF_8)) :
+                    options.containsKey("endpoint") ? Path.of(options.get("endpoint")) :
+                    Path.of(System.getProperty("user.home"), ".sb-repl", "endpoints", ProcessHandle.current().pid() + ".properties");
+            if (server != null) {
+                try { EndpointFile.write(requested, address); endpointFiles.add(requested); }
+                catch (IOException failure) { System.err.println("[sb-repl] Cannot publish existing endpoint: " + failure.getMessage()); }
+                return;
+            }
+            int port = Integer.parseInt(options.getOrDefault("port", "0"));
+            if (port < 0 || port > 65535) throw new IllegalArgumentException("Invalid port");
+            String token = UUID.randomUUID().toString() + UUID.randomUUID();
+            endpoint = requested;
+            Path jar = Path.of(Agent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (Files.isRegularFile(jar)) {
+                instrumentation.appendToSystemClassLoaderSearch(new JarFile(jar.toFile()));
+                try { installInstrumentation(jar, instrumentation); }
+                catch (Throwable exception) { System.err.println("[sb-repl] Context instrumentation unavailable: " + exception.getClass().getSimpleName() + ". Use the Spring bridge or explicit context binding."); }
+            }
+            server = new MiniNreplServer(port, token);
+            server.start();
+            address = new EndpointFile.Endpoint(server.port(), token, ProcessHandle.current().pid());
+            EndpointFile.write(endpoint, address);
+            endpointFiles.add(endpoint);
+            AutoBinder.tryBindOnce();
+            Runtime.getRuntime().addShutdownHook(new Thread(Agent::close, "sb-repl-shutdown"));
+            System.out.println("[sb-repl] Ready on loopback port " + server.port() + "; endpoint: " + endpoint);
+        } catch (Throwable exception) {
+            close();
+            System.err.println("[sb-repl] Agent disabled; application startup continues: " + exception.getMessage());
         }
-        return null;
     }
 
-    private static void startNreplServer(String agentArgs) {
-        int port = 5557;
-        try {
-            if (agentArgs != null) {
-                for (String part : agentArgs.split(",")) {
-                    String[] kv = part.split("=", 2);
-                    if (kv.length == 2 && kv[0].trim().equals("port")) {
-                        port = Integer.parseInt(kv[1].trim());
+    private static void installInstrumentation(Path jar, Instrumentation instrumentation) throws Exception {
+        Path libraries = Files.createTempDirectory("sb-repl-agent-libs-");
+        libraries.toFile().deleteOnExit();
+        List<URL> urls = new ArrayList<>(); urls.add(jar.toUri().toURL());
+        try (JarFile archive = new JarFile(jar.toFile())) {
+            for (JarEntry entry : archive.stream().filter(e -> e.getName().startsWith("agent-libs/") && e.getName().endsWith(".jar")).toList()) {
+                Path file = libraries.resolve(Path.of(entry.getName()).getFileName().toString());
+                try (InputStream input = archive.getInputStream(entry)) { Files.copy(input, file); }
+                file.toFile().deleteOnExit(); urls.add(file.toUri().toURL());
+            }
+        }
+        if (urls.size() < 2) throw new IOException("Bundled Byte Buddy library missing");
+        instrumentationLoader = new URLClassLoader(urls.toArray(URL[]::new), Agent.class.getClassLoader()) {
+            @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                synchronized (getClassLoadingLock(name)) {
+                    if (name.startsWith("net.bytebuddy.") || name.startsWith("com.baader.devrt.AgentInstrumentation")) {
+                        Class<?> loaded = findLoadedClass(name);
+                        if (loaded == null) loaded = findClass(name);
+                        if (resolve) resolveClass(loaded);
+                        return loaded;
                     }
+                    return super.loadClass(name, resolve);
                 }
             }
-        } catch (Throwable ignored) {}
-
-        final int finalPort = port;
-        Thread t = new Thread(() -> {
-            try {
-                MiniNreplServer server = new MiniNreplServer(finalPort);
-                server.start();
-                System.out.println("[dev-runtime] nREPL server started on port " + finalPort);
-            } catch (Throwable t1) {
-                t1.printStackTrace();
-            }
-        }, "dev-runtime-server");
-        t.setDaemon(true);
-        t.start();
+        };
+        instrumentationLoader.loadClass("com.baader.devrt.AgentInstrumentation").getMethod("install", Instrumentation.class).invoke(null, instrumentation);
+    }
+    static void configureTrace(Class<?> type, Set<String> methods) throws Exception {
+        if (instrumentationLoader == null) throw new IllegalStateException("Tracing requires the bundled agent at JVM startup");
+        try {
+            instrumentationLoader.loadClass("com.baader.devrt.AgentInstrumentation")
+                    .getMethod("configureTrace", Class.class, Set.class).invoke(null, type, methods);
+        } catch (java.lang.reflect.InvocationTargetException failure) {
+            throw new IllegalStateException("Cannot update tracing: " + failure.getCause().getMessage(), failure.getCause());
+        }
+    }
+    private static synchronized void close() {
+        if (server != null) { server.close(); server = null; }
+        for (Path file : endpointFiles) try { Files.deleteIfExists(file); } catch (IOException ignored) {}
+        endpointFiles.clear(); address = null;
+        SpringContextHolder.set(null);
     }
 }
