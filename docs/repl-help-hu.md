@@ -8,11 +8,11 @@ Fülek, gombok, mezők és munkafolyamatok az IntelliJ IDEA pluginhoz. Java-kís
 
 **Mit ad a REPL?** A futó Java-alkalmazás saját osztályaival és Spring beanjeivel dolgozhatsz. A session megőrzi az importokat, változókat és metódusokat. Egy eredményt többször megvizsgálhatsz, majd célzott DATA snapshotként elmenthetsz.
 
-**A kézikönyv alapja:** a {{version}} forrásában ténylegesen bekötött 11 fő fül, az alfüleik, gombjaik és beállításaik. A gombfeliratokat eredeti formában adjuk meg. Az IDEA témája, keymapje és ablakmérete módosíthatja az elhelyezést. A felépítési ábra szemléltetés, nem élő képernyőkép.
+**A kézikönyv alapja:** a {{version}} forrásában ténylegesen bekötött 12 fő fül, az alfüleik, gombjaik és beállításaik. A gombfeliratokat eredeti formában adjuk meg. Az IDEA témája, keymapje és ablakmérete módosíthatja az elhelyezést. A felépítési ábra szemléltetés, nem élő képernyőkép.
 
-**Dokumentum frissítése:** 2026. szeptember 15. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is.
+**Dokumentum frissítése:** 2026. szeptember 16. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is. Az angol kiadás ugyanezt a funkciókört mutatja be.
 
-**Elérési út az IDE-ben:** Code > Spring Boot REPL > Help (PDF). A Java-forrás helyi menüjében és a Java REPL fülön is megtalálod.
+**Elérési út az IDE-ben:** Code > Spring Boot REPL > Help (PDF) > Magyar vagy English. A Java-forrás helyi menüje ugyanezt kínálja. A Java REPL > Tools > Help (PDF) nyelvválasztót nyit. Mindkét kézikönyv a plugin része, offline is elérhető.
 
 {{cover-summary}}
 
@@ -67,7 +67,7 @@ A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön
 | --- | --- |
 | Java REPL | Kapcsolat, Java-munkafüzet, futtatás, ellenőrzés és eredmény. |
 | Variables | A saját IDE-session változóinak listája, beillesztése és inspectálása. |
-| Snapshots | Saved, Capture next és Compare alfülek; tartós adatok és egyszeri capture. |
+| Snapshots | Saved, Capture next és Compare alfülek; tartós adatok és capture-szabályok. |
 | Inspector | Valódi objektumok navigálható böngészője; Value és Fields alfül. |
 | Tap / Trace | Alkalmazásértékek megfigyelése és metódushívások követése. |
 | Cases / Reload | Snapshotból mentett próba, elvárt eredmény, ismételt futtatás és HotSwap. |
@@ -76,10 +76,11 @@ A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön
 | AI | Áttekinthető prompt küldése a beállított API-nak; kódjavaslat készítése. |
 | Imports | Mentett importbeállítások; utólag alkalmazhatók a sessionre. |
 | MCP | Helyi MCP-kiszolgáló külső AI-klienseknek, például Claude-nak. |
+| Beans | Beandefiníciók, függőségek, proxy-metaadatok és hívás-előkészítés. |
 
 {{ui-map}}
 
-**Az eredmény alfülei:** Java REPL > Value > Tree / Formatted / Raw; a Cells lapon cellánkénti futási bizonyíték és kimenet látszik. A külön **Output / errors** lapon stdout/stderr és hibaüzenetek látszanak. Az **Inspector > Value** ugyanazt a strukturált megjelenítőt használja, míg az **Inspector > Fields** a tényleges objektumnavigáció felülete.
+**Eredmény:** Value > Tree / Formatted / Raw: érték; Output / errors: kimenet és hibák; Cells: cellafutások; Watches: rögzített megfigyelések. **Inspector:** Value: strukturált érték; Fields: élő objektumnavigáció.
 
 # 03. Java REPL: kapcsolat és futtatás {#repl-controls}
 
@@ -101,7 +102,7 @@ A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön
 | Complete | Kiegészítést kér az aktuális kurzornál. Nem értékeli ki a kódot. |
 | Tools > Toggle live check | Be- vagy kikapcsolja az automatikus, futtatás nélküli kódellenőrzést. Alapból be van kapcsolva. |
 | Check code | Azonnal kéri a munkafüzet elemzését. |
-| Help (PDF) | Megnyitja ezt az offline kézikönyvet. Nincs szükség REPL-kapcsolatra. |
+| Help (PDF) | Magyar vagy angol offline kézikönyvet választhatsz. Nincs szükség REPL-kapcsolatra. |
 | MCP | Átvált az MCP fülre. Önmagában nem indít MCP-szervert. |
 
 # 04. Java REPL: a munkafüzet gombjai {#workbook}
@@ -768,7 +769,7 @@ Meta macOS-en Cmd. Evaluate at Caret és Reload Class esetén a plugin nem regis
 | Trace Method | Az aktuális metódus követése. |
 | Record Class Calls… | Osztályhívások rögzítése: gráf, forrás melletti bemenet és eredmény. Részletek a 39. fejezetben. |
 | Reload Class | Kézi kódfrissítés. |
-| Help (PDF) | A beépített magyar kézikönyv, offline is. |
+| Help (PDF) > English / Magyar | A választott beépített kézikönyv, offline is. |
 
 Az IDEA **Tools** menüjében külön szerepel **Attach & Inject Dev Runtime** és **Bind Spring Context**. A 42 workbench-parancshoz saját gyorsbillentyű rendelhető; új alapértelmezett globális kombinációt nem foglalnak le. A Help (PDF) művelethez is adhatsz saját billentyűt.
 
@@ -840,7 +841,7 @@ A hagyományos listák lapozási alapértéke 50, maximuma 100 sor. A recording 
 | repl_capture_disarm | `rule-id`; saját várakozó szabály visszavonása. |
 | repl_events_start | `label`; tap-feliratkozás. |
 | repl_events_stop | Nincs; tap leállítása. |
-| repl_case_save | **name**, **input**, **expected**; `code`, `type`, `variable`, `expected-exception`, `expected-message`, `assertions-json`, `parameters-json`, `result-expression`, `imports`, `setup`, `teardown`, `tags`, `disabled`, `max-duration-ms`. Code vagy result-expression szükséges. |
+| repl_case_save | **name**, **input**, **expected**; `code`, `type`, `variable`, `expected-exception`, `expected-message`, `assertions-json`, `parameters-json`, `result-expression`, `imports`, `setup`, `teardown`, `tags`, `disabled`, `max-duration-ms`, `max-sql-count`, `max-sql-repetitions`, `max-hibernate-loads`, `max-hibernate-flushes`, `max-hibernate-lazy-loads`, `max-hibernate-response-lazy-loads`. Code vagy result-expression szükséges. |
 | repl_case_run_batch | **names**; új sorral elválasztott CASE-nevek, közös időkeret. |
 | repl_case_run | **name**; mentett eset futtatása. |
 | repl_reproduction_create | **name**, **input**, `variable`, `type`, `metadata-json`; utolsó futásból csomag, újrafuttatás nélkül. |
@@ -848,7 +849,7 @@ A hagyományos listák lapozási alapértéke 50, maximuma 100 sor. A recording 
 
 ## IDE-felvételek és gráf (0.20)
 
-Az alábbi 11 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 60 eszközt tartalmaz. **Share IDE recordings with MCP** szükséges. A részletes lapozási szabályok és egy Claude-munkamenet a 40. fejezetben található.
+Az alábbi 17 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 82 eszközt tartalmaz. **Share IDE recordings with MCP** szükséges. A részletes lapozási szabályok és egy Claude-munkamenet a 40. fejezetben található.
 
 | Eszköz | Argumentum és cél |
 | --- | --- |
@@ -861,8 +862,14 @@ Az alábbi 11 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 60
 | repl_recording_pin | **recording**, **call**, `view`; egy letöltött hívás rögzítése a kliens saját összehasonlítási referenciájaként. |
 | repl_recording_compare | **recording**, **after**, valamint **egy**: `before` / `reference`; opcionális `view`, `offset`, `limit`. Mezőszintű eltérések és részlegesség. |
 | repl_recording_select | **recording**, **call**; a node kijelölése az IDE-ben, forrás és rögzített értékek megnyitása. Állapotmódosítási engedély kell. |
-| repl_recording_start | **expected**, **classes**; az aktuális felvétel azonosítója vagy none, 1-8 különböző pontos osztálynév új sorral elválasztva. Capture/trace és állapotmódosítási engedély is kell. |
+| repl_recording_start | **expected**, **classes**; `sql` (sztring true/false, alapból true), `hibernate` (true/false, alapból sql), `n-plus-one-threshold` (2-1000, alapból 5); az aktuális felvétel azonosítója vagy none, 1-8 különböző pontos osztálynév új sorral elválasztva. Capture/trace és állapotmódosítási engedély is kell. |
 | repl_recording_stop | **recording**; az adott megosztott felvétel leállítása. Capture/trace és állapotmódosítási engedély is kell. |
+| repl_recording_hibernate | **recording**; `view`, `root`, `call`, `event-id`, `kind`, `offset`, `limit`. Hibernate 6.6 metaadatok, session, entity, kapcsolat, lazy/flush/cache események és kapcsolódó SQL-azonosítók. |
+| repl_recording_hibernate_findings | **recording**; `view`, `root`, `call`, `offset`, `limit`. SELECT-ekkel összekötött lazy N+1-gyanú és válaszkészítés közbeni lazy betöltések. |
+| repl_recording_hibernate_compare | **recording**, **after**, és pontosan egy: `before` / `reference`; `view`. Hibernate-számlálók előtte/utána, különbség és részlegesség. |
+| repl_recording_sql | **recording**; `view`, `root`, `call` (teljes híváság), `sql-id`, `offset`, `limit`, `text-offset`, `text-limit`. JDBC-események és SQL-szöveg lapozva; szülő/root, idő, datasource, forrás és hibafajta. |
+| repl_recording_findings | **recording**; `view`, `root`, `offset`, `limit`. Kérésenkénti N+1-gyanús SELECT-csoportok, darabszám, idő és példaazonosítók. |
+| repl_recording_sql_compare | **recording**, **after** és pontosan egy: `before` / `reference`; opcionális `view`. Két híváság SQL-statisztikája és eltérése. |
 
 # 26. Hibaelhárítás a felületről {#troubleshooting}
 
@@ -881,7 +888,7 @@ Az alábbi 11 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 60
 | HTTP-ből hiányzik környezeti változó | A Play az IDE környezetét látja, a snippet az alkalmazásét. Ellenőrizd, hol állítottad be. |
 | MCP 401 / kapcsolat elutasítva | Start MCP állapot, friss URL/token, pontos Authorization fejléc. Minden Start új tokent generál. |
 | Claude Code command hibát jelez | JSON-konfigurációban legyen `"type": "http"`. Az URL önmagában kevés. |
-| MCP GET /mcp válasza 405 | Ez nem weboldal és nem SSE GET-folyam; Streamable HTTP MCP-kliens kell. |
+| MCP GET /mcp hibát ad | Az SSE-hez bearer token, inicializált session és Accept: text/event-stream kell. Nem nyilvános weboldal; lásd a 49. fejezetet. |
 | MCP-eszköz hiányzik | A jogosultságokat leállított MCP mellett módosítsd, utána Start és új klienskonfiguráció. |
 | Variables Previous/Next nem lapoz | Az Inspector saját Previous/Next gombjait használd. |
 
@@ -914,7 +921,7 @@ A csonkolás és részleges vizsgálat jelzését mindig vedd figyelembe. Egy nu
 
 A kézikönyv a repository `src/main/kotlin/hu/baader/repl/ui`, `ai`, `mcp`, `settings` és `runner` kódjára, a menüregisztrációra és a runtime műveleteire épül. A nem bekötött régi paneleket nem sorolja aktív funkcióként.
 
-Szerkeszthető forrás: `docs/repl-help-hu.md`; generátor: `scripts/build-help-pdf.py`. A Claude-nak átadható részletes eszközleírás: `docs/claude-repl-instructions.md`. A kliensbeállítások bővebben: `docs/claude-repl-guide-hu.md`. Aktuális kiadás: `SAFETY_REPRODUCTION_0_14.md`; korábbi IDE-kompatibilitás: `IDEA_2025_2_0_13_1.md`.
+Szerkeszthető forrás: `docs/repl-help-hu.md` és `docs/repl-help-en.md`; a `scripts/build-help-pdf.py` alapból mindkét PDF-et újraépíti. A Claude-nak átadható részletes eszközleírás: `docs/claude-repl-instructions.md`. A kliensbeállítások bővebben: `docs/claude-repl-guide-hu.md`. A 0.22 ellenőrzése: `HIBERNATE_0_22.md`; SQL-felvételek: `SQL_RECORDINGS_0_21.md`; korábbi IDE-kompatibilitás: `IDEA_2025_2_0_13_1.md`.
 
 A Help (PDF) a pluginba csomagolt példányt nyitja meg. Az új kézikönyv a friss csomag telepítésével kerül az IDE-be; önállóan ebből a PDF-ből is használható. A felület működését a forrás alapján ellenőriztük; ez nem jelenti minden üzleti alkalmazás vagy Claude-kliens teljes körű tesztelését.
 
@@ -994,7 +1001,9 @@ Az MCP engedélyei eszközszintű kapcsolók; a tetszőleges Java-futtatás nem 
 
 **A 0.15-ben elkészült:** mezőszintű assertionök, paraméterezett CASE, setup/cleanup, JUnit-export és a hozzájuk tartozó MCP-eszközök. Részletek a következő fejezetekben.
 
-**További ütemezett munka:** automatikus snapshot-sémamigráció, SQL-előnézet, kimenő hívások tiltása vagy stubolása, hívásfa/async trace, Bean Explorer, fejlett Inspector, távoli konténer/Kubernetes kapcsolat, headless/CI runner, titkosítás és csapatszintű registry. Ezeket a kiadás nem állítja működő funkciónak.
+**A későbbi fejezetekben már elérhető:** notebookállapot, workspace-mentés, snapshot-verziók, forrásbeli snapshotpont, hívásgráf és idővonal, SQL/N+1 és Hibernate-megfigyelés (35-42. fejezet).
+
+**További lehetséges fejlesztések:** automatikus snapshot-sémamigráció, kimenő hívások tiltása vagy stubolása, általános reactive követés, távoli konténer/Kubernetes kapcsolat, önálló headless/CI runner, titkosítás és csapatszintű registry. Ezeket a kiadás nem állítja működő funkciónak.
 
 # 32. CASE 2.0: mezők és assertionök {#case-assertions}
 
@@ -1233,7 +1242,7 @@ Például a feldolgozó és a parser osztály együttes kiválasztásakor látha
 | Save recording… | Forrás, gráf és rögzített értékek mentése `.sbrepl-recording` fájlba. |
 | Open recording… | Mentett felvétel megnyitása alkalmazáskapcsolat nélkül is. |
 
-A nézet keskeny ablakban egymás alá rendezi a gráfot és az adatokat. A szülő-gyerek élek az ugyanazon a szálon megfigyelt hívásokat kapcsolják össze. Külön szál külön gyökér; a felvétel nem talál ki kapcsolatot az aszinkron, Reactor vagy CompletableFuture feladatok között.
+A nézet keskeny ablakban egymás alá rendezi a gráfot és az adatokat. A szokásos élek az azonos szálon megfigyelt hívásokat kapcsolják össze. Bekapcsolt async felvételnél a támogatott executorok feladathatára köti össze a beküldőt a munkaszállal (47. fejezet); a nem követett munka külön gyökeret kap.
 
 ## Gráfnavigáció és szűrés (0.19)
 
@@ -1289,7 +1298,7 @@ A **Timeline** fül szálanként, időarányos sávokkal mutatja a hívásokat. 
 
 Az idővonalon vízszintesen húzva kijelölhetsz egy időszakot. A hívásfa az időszakkal átfedő hívásokat és hívóikat tartja meg; az idővonalon a többi hívás halvány marad tájékozódásként. A **Clear time range** csak az időszakot törli, a többi szűrő megmarad. A **Clear filters** az összes szűrést feloldja.
 
-Az időtengely a felvétel legkorábbi rögzített kezdőidejétől számított milliszekundum. A kezdőidő milliszekundum pontosságú rendszeróra, az időtartam külön mért eltelt idő. Az órakorrekció és a rögzítés költsége befolyásolhatja a képet. Futó vagy befejezetlen hívásnál nincs teljes befejezési idő; a rövid jel csak a rögzített részt mutatja. Az idővonal nem kapcsol össze automatikusan külön szálakon futó feladatokat.
+Az időtengely a felvétel legkorábbi rögzített kezdőidejétől számított milliszekundum. A kezdőidő milliszekundum pontosságú rendszeróra, az időtartam külön mért eltelt idő. Az órakorrekció és a rögzítés költsége befolyásolhatja a képet. Futó vagy befejezetlen hívásnál nincs teljes befejezési idő; a rövid jel csak a rögzített részt mutatja. A támogatott szálváltásokat csak bekapcsolt async felvétel kapcsolja össze (47. fejezet).
 
 ## Mit őriz meg a felvétel?
 
@@ -1303,7 +1312,7 @@ Ha a forrás vagy az adott túlterhelés nem oldható fel, a panel ezt jelzi, a 
 
 **Értékelőnézet:** egy értékfánál legfeljebb 500 node, hat mélységszint és node-onként 50 gyermek kerül előnézetbe; legfeljebb az első 32 argumentum. A szövegkeret 131072 karakter, egy mélyebben levő string legfeljebb 4096 karakter. A korlátot elérő részen jelzés látszik. A teljes élő objektumot az Inspectorban vizsgálhatod, amíg elérhető, vagy célzott DATA-t menthetsz róla. A DATA 200 MiB-os kerete ettől különálló.
 
-A rögzítés mezőket olvas, alkalmazásbeli gettert és egyedi szerializálót nem indít. A hívó szálon végez munkát, ezért lassíthatja a vizsgált hívást; ez nem pontos teljesítményprofilozó. Más szál által módosított objektumról nem garantál atomi képet. Először kevés, célzott osztályt válassz.
+Az alapértelmezett megjelenítési felvétel mezőket olvas, alkalmazásbeli gettert és egyedi szerializálót nem indít. A külön engedélyezett Capture replay DATA viszont snapshot-szerializálást végez (43. fejezet). A hívó szálon végez munkát, ezért lassíthatja a vizsgált hívást; ez nem pontos teljesítményprofilozó. Más szál által módosított objektumról nem garantál atomi képet. Először kevés, célzott osztályt válassz.
 
 **Offline fájl:** legfeljebb 64 MiB; a mentett forrás fájlonként egymillió, összesen négymillió karakter. A fájl alkalmazásadatot és forrást tartalmazhat, titkosítás nélkül. Betöltéskor ellenőrzi a formátumot, a szülőkapcsolatokat, a méretkorlátokat és a forrás ellenőrzőösszegét. Ez sérülést érzékelhet, hitelességet nem bizonyít. Mentéskor még futó vagy megszakadt kapcsolat miatt befejezetlen hívás **INCOMPLETE** állapotot kap. Kapcsolatvesztés után csak a már letöltött adatok őrizhetők meg. A felvételt külön kell menteni, a workspace-export nem tartalmazza.
 
@@ -1316,7 +1325,7 @@ A rögzítés mezőket olvas, alkalmazásbeli gettert és egyedi szerializálót
 
 Minden recording eszközhöz szükséges az **MCP > Share IDE recordings with MCP** kapcsoló; alapból ki van kapcsolva. Olvasáshoz a Java-futtatást nem kell engedélyezni. A **Choose allowed tools** tovább szűkítheti az elérést, például a forrás megosztását. A pin csak a kliens saját rögzített előnézetét módosítja. A select az IDE-kijelölést is módosítja; ehhez a fő állapotmódosítási kapcsoló szükséges. Start/stop esetén a capture/trace kapcsoló is kell.
 
-A 11 eszköz teljes argumentumtáblázata a **25. fejezetben** található. Itt a közös jogosultságokat, az adatolvasás sorrendjét és az összehasonlítás menetét mutatjuk be.
+A 17 eszköz teljes argumentumtáblázata a **25. fejezetben** található. Itt a közös jogosultságokat, az adatolvasás sorrendjét és az összehasonlítás menetét mutatjuk be.
 
 Az alábbi szabályok a felvételi eszközökre vonatkoznak:
 
@@ -1354,4 +1363,308 @@ A példában a 3-as hívásszám is helykitöltő: a híváslistából válassz 
 
 ## Kapcsolat és offline fájlok
 
-MCP-indításhoz élő REPL-kapcsolat kell; annak megszakadása leállítja az MCP-t. A közben IDE-ben megnyitott offline felvétel megosztható. Fájlnyitás/mentés és ablakkezelés az IDE-ben marad. Eseményfolyam nincs; státuszt ritkán kérj.
+MCP-indításhoz élő REPL-kapcsolat kell; annak megszakadása leállítja az MCP-t. A közben IDE-ben megnyitott offline felvétel megosztható. Fájlnyitás/mentés és ablakkezelés az IDE-ben marad. A resource-feliratkozást és az opcionális task-kezelést a 49. fejezet ismerteti.
+
+
+# 41. SQL, N+1-jelzés és DB-ig követhető hívások {#sql-recordings}
+
+A 0.21-es kiadás a Recorded calls felvételhez JDBC-megfigyeléseket kapcsol. Szinkron Spring MVC-kérésnél a kérés gyökérhívása, a kiválasztott alkalmazásosztályok metódusai és a tényleges JDBC-műveletek egy fában látszanak. Nem kell hozzá alkalmazáskódba írt SQL-logolás vagy külön adatbázis-plugin.
+
+## Indítás és értelmezés
+
+1. Tap / Trace > Recorded calls > **New recording...**. Add meg a fontos controller/service/repository osztályokat (1-8).
+2. Hagyd bekapcsolva a **Record JDBC/SQL and synchronous Spring MVC requests** opciót. A **Suspected N+1 repetition threshold** alapértéke 5, tartománya 2-1000.
+3. Futtasd le az alkalmazásban a vizsgált HTTP-kérést vagy belépő metódust. A rögzítés önmagában nem indít üzleti kérést.
+4. **Stop recording**, majd a **Root** mezőben válaszd a vizsgált kérést. A párhuzamos kérések és a különálló belépő hívások SQL-jei külön gyökérhez tartoznak.
+5. Nyisd meg az **SQL & N+1** fület. A csoportok kinyithatók; minden végrehajtásnak saját SQL-azonosítója és valódi szülőhívása van.
+
+A JDBC-node megmutatja az SQL-sablont, a végrehajtások számát, a kliensoldali időt és a datasource osztály/instance azonosítóját. A kapcsolat megszerzésének ideje külön mérés, nem része az SQL-végrehajtások összegének. A teljes Java-hívás ideje a JDBC-munka mellett minden más alkalmazásmunkát és a megfigyelés költségét is tartalmazza.
+
+Nem kiválasztott Java-metódusokhoz nem készülnek kitalált node-ok. A 47. fejezet külön bekapcsolható Executor/@Async/CompletableFuture-követést ad; Reactor, R2DBC, adatbázison belüli tervek és lockok továbbra sincsenek követve. A JDBC-idő kliensoldali mérés; a szinkron megfigyelés maga is lassítja a futást.
+
+## Gombok és nézetek
+
+| Vezérlő | Működés |
+| --- | --- |
+| Group SQL | A gráfban azonos szülőhöz, SQL-sablonhoz, datasource-hoz és hívási helyhez tartozó műveleteket összevonja. Kikapcsolva egyes végrehajtások látszanak. |
+| SQL & N+1 | SQL-részletező: darabszám, idő, datasource, forrásosztály/metódus/sor, szál, root és hibafajta. |
+| SQL / datasource / source + Filter | A rögzített SQL-sablonokban és metaadatokban keres. Enterrel is alkalmazható. |
+| Suspected N+1 only | Csak a küszöböt elérő ismétlődő SELECT-csoportokat mutatja. |
+| Open originating call and source | A kijelölt SQL-esemény rögzített alkalmazáshívójára lép, és annak forrását/értékeit nyitja meg. |
+| Pin SQL baseline | Az aktuális Root-szűrő SQL-adatait rögzíti. Ez a referencia új felvétel vagy offline fájl megnyitása után is megmarad. |
+| Clear baseline | Törli az SQL-referenciát. A Java-értékek Pin reference összehasonlítása ettől külön funkció. |
+| Timeline | Az egyes JDBC-műveletek valódi időszakaszai látszanak. A gráf csoportosítása nem készít belőlük mesterséges folytonos időszakaszt. |
+| Save / Open recording | Az SQL-napló és a beállított küszöb is a felvételbe kerül. A régi fájlok SQL nélkül továbbra is olvashatók. |
+
+## Mit jelent az N+1-gyanú?
+
+A jelzés egy kérésen/rooton belül az azonos normalizált SELECT, datasource és hívási hely ismétlődéseit keresi. Öt vagy több végrehajtásnál alapból **suspected N+1** jelzés jelenik meg. A hívóág node-jai is figyelmeztető jelzést és SQL-darabszámot kapnak.
+
+Példa: egy Hibernate-kérés öt rendelést olvas, majd minden rendelés vevőjét külön tölti be. Ez 1+5 SELECT. Az integrációs tesztben a fetch join változat ugyanazt az eredményt egy SELECT-tel adja. Az alkalmas javítást a konkrét lekérdezés alapján válaszd: fetch join, entity graph, batch fetch vagy célzott DTO-lekérdezés lehet indokolt.
+
+Az ismétlődés önmagában nem bizonyít hibát: szándékos ismételt lekérdezés és polling is lehet. A küszöb csak diagnosztikai jelzés, nem automatikus kódmódosítás. Lapozásnál és több kollekciónál a fetch join más problémát is okozhat; a javítás eredményét és lekérdezésszámát is ellenőrizd.
+
+## Javítás előtti és utáni ellenőrzés
+
+Válaszd ki a hibás kérés Root-ját, és nyomd meg a **Pin SQL baseline** gombot. Javítsd és fordítsd a kódot; támogatott módosításnál HotSwap is használható. Indíts új felvételt, hajtsd végre ugyanazt a kérést, majd válaszd ki annak Root-ját.
+
+Az összehasonlítás megmutatja a SQL-darabszám, összes JDBC-idő és legnagyobb ismétlődés különbségét. A datasource, bemenet, cache és környezet legyen összevethető. Egyetlen rövidebb futás nem teljesítménybizonyíték. A részleges felvételeket a panel külön jelöli.
+
+## CASE-korlátok és JUnit
+
+A **Cases / Reload > Options** két új mezője: **Maximum SQL executions** és **Maximum SQL repetition**. Üresen nincs SQL-állítás; a 0 megengedett, például adatbázis-hozzáférés nélküli kód ellenőrzéséhez. Tartományuk 0-1000000.
+
+Az első mező a JDBC execute/executeQuery/executeUpdate és batch végrehajtások számát korlátozza; hibás SQL is beleszámít. Egy executeBatch egy végrehajtásnak számít, a batch belső elemszámát nem állítjuk lekérdezésszámnak. A második mező rootonként, datasource-onként és SQL-sablononként számol; nem csak SELECT-re érvényes. A kapcsolatfelvétel egyik darabszámba sem tartozik.
+
+A mérési ablak a Code és Result expression részekre terjed ki. A bemenet betöltése, Imports, Setup, Cleanup és JSON-összehasonlítás kívül marad. Küszöbtúllépéskor **FAILED** az eredmény. Hiányos SQL-bizonyíték mellett nem lehet sikeres felsőkorlát-ellenőrzés: **INCONCLUSIVE** vagy **ERROR** jelenik meg. Agent nélküli runtime-ban a SQL-ellenőrzés hibaüzenettel megáll.
+
+A **JUnit ZIP** megőrzi a SQL-korlátokat. A csomag hordozható DataSource-proxyt és SQL-normalizálót tartalmaz; a teszt JUnit/Spring környezetben agent nélkül fut. A JDBC-hozzáférésnek Spring által kezelt DataSource beaneken át kell mennie. Közvetlen DriverManager, natív unwrap, aszinkron munka vagy konkrét pool-osztály injektálása esetén a generált teszt adaptálást igényel. Ezt az export README-je is leírja.
+
+## MCP-használat
+
+A katalógus 82 eszközt tartalmaz; a három új SQL-eszköz a 25. fejezet táblázatában szerepel. Ugyanaz a **Share IDE recordings with MCP** jogosultság és eszközönkénti engedélyezés érvényes. Olvasás és összehasonlítás nem futtat új Java-kódot.
+
+- `repl_recording_sql`: `events`, `statistics`, `nextOffset`. Egy SQL-szöveghez `sql-id`, `text-offset`, `text-limit` használható; a `nextTextOffset` az esemény sorában van. Szöveglimit alapból 512, legfeljebb 2048 karakter.
+- `repl_recording_findings`: `findings`, root, darabszám, idő, forrás és példa SQL/szülő-azonosítók. Az SQL-szöveg rövidített; a teljeshez az SQL-eszközt használd.
+- `repl_recording_pin`: a hívás értékeivel együtt annak SQL-ágát is megőrzi a kliensnek.
+- `repl_recording_sql_compare`: `sqlBefore`, `sqlAfter`, `sqlDelta`. Pontosan egy `before` vagy `reference` és egy `after` kell. A normál `repl_recording_compare` is megadja ezeket a statisztikákat.
+- `recording` és `view` védi a lapozást. SQL-változás is új view-t eredményez. `partial=true`, `pending` vagy `dropped` mellett ne állítsd, hogy az N+1 biztosan megszűnt.
+
+Claude-nak adható feladat: „Olvasd el az aktuális felvétel SQL-jeit és N+1-gyanús csoportjait. Azonosítsd a kérés rootját és az ismétlődő SQL alkalmazásbeli hívóját. Pineld a híváságat; javítás és új felvétel után hasonlítsd össze ugyanazt a kérést. Ne indíts üzleti műveletet külön kérés nélkül.”
+
+## Határok és megőrzött adatok
+
+Szinkron Spring MVC és JDBC/JPA támogatott. A HTTP-gyökér akkor jön létre, ha a kérés eléri valamelyik kiválasztott osztályt. Az utána, ugyanazon dispatcher-szálon lefutó SQL is ide kapcsolódik. A HTTP-metódus és útvonal rögzíthető; query string, header és body nincs a HTTP-gyökérben.
+
+Az SQL string-/számliteráljait és megjegyzéseit a normalizáló eltávolítja. Paraméterérték, ResultSet-tartalom és DB-jelszó nincs begyűjtve; hibánál a kivétel osztálya szerepel. A felvétel más alkalmazásadatot és forrást tartalmazhat, tehát nem általánosan anonimizált.
+
+Külön keret a **1000 JDBC-esemény / 1,5 millió kódolt karakter**, a **200 Java-hívás** és a **32 MiB értékelőnézet**. Korlátozott, hiányos vagy folyamatban lévő adatnál jelzés látszik. Késői attach előtt létrehozott PreparedStatement SQL-je hiányozhat.
+
+# 42. Hibernate a rögzített hívásfolyamban {#hibernate}
+
+A 0.22-es kiadás a Hibernate 6.6 ORM-eseményeit is hozzákapcsolja a felvételhez. Láthatod, melyik entity vagy kapcsolat lazy betöltése indított SELECT-et, történt-e flush vagy írás, illetve kiszolgálta-e a cache a lekérdezést. Az alkalmazás meglévő StatementInspector és event listener beállításai megmaradnak. A plugin nem kapcsolja be és nem nullázza a globális Hibernate Statistics számlálókat.
+
+## Bekapcsolás és a folyamat követése
+
+1. A frissített plugin telepítése után indítsd újra az IDE-t és a célalkalmazást is, hogy az új agent fusson.
+2. **Tap / Trace > Recorded calls > New recording...**: válaszd ki a controller/service/repository osztályokat. A JDBC/SQL opció mellett legyen bekapcsolva a **Record Hibernate 6.6 entity / session events** jelölőnégyzet.
+3. Hajtsd végre az alkalmazásban a vizsgált műveletet, majd állítsd meg a felvételt. A **Root** szűrővel válaszd ki a kérést.
+4. Az ORM-node-ra kattintva megnyílik a **Hibernate** részletező. A fa és a timeline ugyanazokat a rögzített eseményeket használja; az ORM-művelethez tartozó JDBC-node a gyermeke.
+
+Például: Service-hívás > `Order.customer` lazy betöltés > `select ... where id=?`. A Java-szülő, ORM-szülő, root, szál és session külön azonosítóként szerepel. A session token nem entity-azonosító és nem újrafelhasználható objektumhivatkozás.
+
+## Gombok és szűrők
+
+| Felirat / hely | Mire való? |
+| --- | --- |
+| Hibernate részletező fül | Entity-betöltések, kapcsolatok, flush, dirty check, cache és tranzakciós események a jelenlegi Root-szűrőben. |
+| Entity / relationship / source | Keresés entity- és kapcsolatnévben, leírásban, forrásosztályban és metódusban. Filter vagy Enter alkalmazza. |
+| All events / Findings / eseménytípus | Minden esemény, csak a figyelmeztetésekhez kapcsolódók, vagy egy konkrét eseménytípus. |
+| Esemény kiválasztása | Session, forráshely, idő, hibafajta, figyelmeztetés magyarázata és kapcsolódó SQL-ek jelennek meg. A részletek görgethetők. |
+| Open originating call | A rögzített Java-hívót választja ki, annak forrásával és elmentett bemenetével/eredményével. Nem futtat kódot. |
+| Open entity mapping | Az entity aktuális forrását nyitja meg a projektben. A jelenlegi kód eltérhet a felvétel idején futótól. Hiányzó forrást külön jelez. |
+| Pin Hibernate baseline | Megőrzi az aktuális Root-szűrő ORM-számlálóit összehasonlításhoz; új felvétel után is megmarad. |
+| Clear baseline | Törli a Hibernate-referenciát. Az SQL baseline és a Java Pin reference külön referencia. |
+| Save / Open recording | Az ORM-naplót az SQL-lel és Java-hívásokkal együtt tárolja. A korábbi fájlverziókat is megnyitja. |
+
+## Milyen eseményeket látok?
+
+- **ENTITY_LOAD / INSERT / UPDATE / DELETE**: entity-művelet. Update-nél a módosult property-k neve látható, értékük nem.
+- **LAZY_ENTITY / COLLECTION_INIT / LAZY_ATTRIBUTE**: proxy, persistent collection vagy bytecode-enhanced mező inicializálása. A kapcsolat például `Order.customer`; ha nem állapítható meg egyértelműen, unknown vagy multiple associations jelzés látható.
+- **QUERY**: normalizált HQL-lekérdezés; a tényleges adatbázis-végrehajtásokat a hozzárendelt SQL-ek mutatják.
+- **FLUSH / AUTO_FLUSH / DIRTY_CHECK**: flush, automatikus flush ellenőrzése és dirty checking. Az AUTO_FLUSH részlete mutatja, valóban szükséges volt-e flush.
+- **TRANSACTION_BEGIN / COMMIT / ROLLBACK**, valamint **TRANSACTION**: tranzakcióhatárok és befejezési eredmény, sessionhöz kötve.
+- **CACHE_HIT / MISS / PUT**: L2 cache eseményei. **QUERY_CACHE_HIT / MISS / PUT**: query cache eseményei. A plugin nem kapcsolja be a cache-t, és nem változtatja meg a cache-provider konfigurációját.
+
+Az entity-load darabszám nem SQL-darabszám: egy query több entityt tölthet be, és cache-találat is létrehozhat managed entityt. A lazy inicializálás sem feltétlenül jelent SQL-t. Az L1 persistence contexthez nem állítunk teljes hit/miss számlálót. A Hibernate-időtartam magában foglalhatja a belső JDBC-munkát; ezeket az átfedő időket ne add össze.
+
+## N+1 és válaszírás közbeni lazy betöltés
+
+A **suspected-n-plus-one** figyelmeztetéshez ugyanazon rootban, kapcsolatnál és forráshelynél ismétlődő lazy inicializálások és tényleges SELECT-ek kellenek. A küszöb a New recording N+1 mezőjéből jön; alapból 5. Cache-ből kiszolgált, SQL nélküli lazy műveletek önmagukban nem adnak ilyen jelzést.
+
+A **lazy-during-response** azt jelzi, hogy a lazy betöltés a szinkron Spring MVC visszatérési értékének kezelése vagy későbbi renderelése közben történt, például JSON-serializálásnál. Ez külön figyelmeztetés; nem azonos minden controller után futó munkával. A magyarázat és a konkrét SQL-azonosítók a részletezőben szerepelnek. Mindkettő vizsgálati jelzés, nem automatikus bizonyíték hibás fetch-stratégiára.
+
+Hasonlítsd össze ugyanazt a kérést azonos bemenettel, profillal és cache-állapottal. A **Pin Hibernate baseline** entity/lazy/flush és cache-számlálókat mutat előtte/utána; az SQL baseline adja a tényleges JDBC-darabszámot. Egy fetch join javításnál például az 1+5 SELECT egyre csökkenhet, miközben az eredmény változatlan.
+
+## Inspector: a megtekintés nem tölt be lazy adatot
+
+Az Inspector a Hibernate-proxyt, persistent collectiont és megfigyelt entityt felismeri. Mutatja az inicializáltságot és a megfigyelhető managed/attached/detached állapotot. Betöltetlen proxy vagy collection tartalmát nem nyitja ki, és nem hív rajta size/iterator vagy entity getter műveletet. Már inicializált értéknél a betöltött mezők vagy a collection háttértárolója böngészhető.
+
+Enhanced entity-nél a még nem betöltött mező **Unfetched Hibernate attribute; not read** jelzést kap. A null alapértéket nem állítja tényleges betöltött adatnak. Nem megfigyelt vagy nem támogatott entity-nél az állapot ismeretlenként jelenhet meg; a felület nem talál ki managed állapotot. Kifejezett REPL-kóddal továbbra is kérhetsz getterhívást, amely viszont valódi lazy betöltést indíthat.
+
+## CASE-korlátok és JUnit-export
+
+A **Cases / Reload > Options** négy opcionális mezője:
+
+| Mező | Mit korlátoz? |
+| --- | --- |
+| Maximum entity loads | ENTITY_LOAD események száma. |
+| Maximum Hibernate flushes | FLUSH, valamint a required=true AUTO_FLUSH események száma. |
+| Maximum lazy initializations | Proxy-, collection- és enhanced-attribute inicializálások együtt. |
+| Maximum lazy loads during response handling | A fenti lazy műveletek közül a szinkron MVC-válaszkészítéshez tartozók. |
+
+Üres mező: nincs ilyen assertion. A 0 érvényes; a tartomány 0-1000000. A mérési ablak a Code és Result expression részekre terjed ki; az input betöltése, Imports, Setup, Cleanup és összehasonlítás kimarad. Túllépés: FAILED. Részleges adat: INCONCLUSIVE, ha már egy ismert túllépés nem bizonyít FAILED eredményt. Hiányzó vagy nem támogatott adapter esetén a mérés nem indul el sikeres nullás számlálóval.
+
+A **JUnit ZIP** megőrzi ezeket a korlátokat, és tartalmazza a hozzájuk illő `runtime/sb-repl-agent.jar` fájlt. Az ORM-es teszt JVM-jéhez szükséges:
+
+```text
+-javaagent:/abs/path/runtime/sb-repl-agent.jar=port=0
+```
+
+Mavennél a Surefire argLine-ba, Gradle-nél a Test feladat jvmArgs opciójába tedd; a meglévő opciókat, például JaCoCo-t őrizd meg. A build daemon beállítása önmagában nem elég. A teszthez Hibernate 6.6 és egy már megnyitott session szükséges, amit a JPA/Spring inicializálás rendszerint létrehoz; szükség esetén a CASE Setup-ban nyiss és zárj egy sessiont. Az export README-je tartalmazza a feltételeket. Az agent helyi, hitelesített fejlesztői endpointot is indít. IDE nem kell; a kizárólag SQL-korlátot használó export továbbra is agent nélkül fut.
+
+## MCP és korlátok
+
+A 25. fejezet három új eszköze: `repl_recording_hibernate`, `repl_recording_hibernate_findings`, `repl_recording_hibernate_compare`. A katalógus összesen **82 eszköz**. A meglévő **Share IDE recordings with MCP**, tool allowlist, maszkolás és audit érvényes. Olvasás és összehasonlítás nem hajt végre új alkalmazáskódot. A pin az ORM- és SQL-ágat is megőrzi; a statisztikák hibernateBefore/After/Delta mezőkben hasonlíthatók össze.
+
+A kipróbált adapter **Hibernate 6.6.29.Final**, Java 17/21 alatt. Más Hibernate-verzióra nem jelentünk teljes mérést. Szinkron session/MVC/JDBC és támogatott, kapcsolt munkaszálak figyelhetők meg; reactive/R2DBC, StatelessSession és DB-belső execution plan/lock adatok nem részei ennek az adapternek. A késői attach előtti eseményeket nem lehet visszanyerni.
+
+A Hibernate-napló kerete önállóan **1000 esemény / 1,5 millió kódolt karakter**, legfeljebb 64 ORM-szülőszinttel. Omitted/dropped, pending, unavailable vagy partial jelzés mellett a számok nem igazolják a teljes futás felső korlátját. A felvétel a kiválasztott osztályokhoz tartozó megfigyelt útvonalat mutatja; nem teljes alkalmazásprofilozó.
+
+# 43. Rögzített hívásból futtatható CASE {#recorded-case}
+
+**Helye:** Tap / Trace > Recorded calls. A 0.23-as munkafolyamat befejezett hívásból készít szerkeszthető reprodukciót, a metódus újrafuttatása nélkül.
+
+1. Válaszd a **New recording...** műveletet és az alkalmazás osztályait.
+2. A valódi kérés elindítása előtt kapcsold be a **Capture replay DATA** opciót. Ez külön engedélyezendő, mert a snapshot-szerializálók gettereket hívhatnak, és munkát adnak az alkalmazás szálának.
+3. Jelölj ki egy befejezett Java-hívást, majd **Create CASE from call...**, vagy jobb kattintás a gráf csomópontján.
+4. Adj új CASE-nevet, és válaszd ki a Spring beant. Statikus metódushoz nem kell bean. Több lehetséges fogadó esetén választani kell.
+5. A **Cases / Reload** fülön frissíts, majd töltsd be az új CASE-t. Futtatás előtt nézd át a Code, Result expression, típus, elvárt kimenetel, Observed classes és SQL/ORM-korlátok mezőit.
+
+## Mi jön létre?
+
+A művelet `név-input`, `név-expected` és `név` néven ment. A bemenet arg0, arg1 és további paramétereit belépéskor, a kimenetelt kilépéskor rögzíti. A későbbi objektummódosítások nem írják át ezeket a másolatokat. A generált Java az argumentumokat a deklarált publikus típusra alakítja, és a kiválasztott beant hívja, annak proxyviselkedésével együtt. JDK-proxyhoz publikus interfészt, CGLIB-proxyhoz az alkalmazás típusát használja.
+
+Kivételnél típus- és üzenetelvárás készül. Teljes, elérhető SQL- és Hibernate-megfigyelés alapján induló korlátok is bekerülhetnek. Hiányos aszinkron vagy korlátozott felvételből nem készül bizonyítottnak tekintett felső korlát. Ezek áttekintendő kiindulási értékek, nem automatikusan elfogadott viselkedés.
+
+## Korlátok
+
+A teljes adatfelvétel külön kerete **2 MiB bemenetenként/eredményenként, 32 MiB felvételenként**. Ez elkülönül az előnézetek és a normál DATA-tárolás keretétől. Publikus, elérhető metódustípusok és szerializálható adatok szükségesek. Future/CompletionStage helyett a munkaszálon elkészült értéket kell rögzíteni. Framework-infrastruktúra, nem támogatott típus és méretkorlát esetén látható hiba jelzi, hogy nincs megbízható replay.
+
+A teljes replay DATA az aktuális runtime-felvételben él. A hordozható `.sbrepl-recording` megjelenítési bizonyítékot tárol, ezt a teljes DATA-t nem. A CASE-t készítsd el a felvétel lecserélése, Reset vagy kapcsolatbontás előtt. Az így létrejött tartós DATA és CASE a meglévő reproduction/workspace/JUnit funkciókkal exportálható.
+
+A generált konverzió Jackson ObjectMappert és az elérhető modulokat használja. Alkalmazásspecifikus mixin, codec, security/tenant context és időfüggés külön áttekintést vagy Setup kódot igényelhet. A funkció reprodukciót készít elő; nem állítja vissza az egész alkalmazás futási környezetét.
+
+# 44. DATA-másolat szerkesztése és variációk {#data-copies}
+
+**Helye:** Snapshots > Saved > **Edit DATA copy**. Előtte jelölj ki egy DATA snapshotot. Az Inspector **Edit DATA copy...** gombja először új eredeti DATA-ként rögzíti a kiválasztott élő értéket, majd ugyanezt a szerkesztőt nyitja meg.
+
+| Vezérlő | Működés |
+| --- | --- |
+| New DATA name | Eltérő, még nem használt név kell. A forrás DATA nem íródik felül. |
+| Restore type | Az ellenőrzéshez használt deklarált Java-típus. |
+| JSON editor | Formázott, leválasztott payload. Szerkesztése nem módosít élő objektumot. |
+| Validate type | JSON-feldolgozás és típusos visszatöltési próba. Konstruktor és egyedi deszerializáló alkalmazáskódot futtathat. |
+| OK | Újra ellenőriz, majd új DATA-másolatot ment. A forrás checksumának megváltozása elutasítja az elavult szerkesztést. |
+| Cancel | Bezárja a szerkesztőt; a már elküldött mentést nem vonja vissza. |
+
+Az interaktív mérethatár **2 MiB**. Nagyobb DATA-ból előbb kisebb DTO-vetületet készíts, vagy exportáld. Az ellenőrzés a kiválasztott deklarált típusra vonatkozik; egy generikus Map nem minden belső üzleti DTO ellenőrzése. A másolat megőrzi a forrás nevét és verzióját.
+
+## Paramétervariációk
+
+A **Cases / Reload** fülön jelölj ki egy mentett CASE-t, majd **Create variants...**. Adj új CASE-nevet és 1-20 különböző DATA-nevet, soronként egyet. Bemenetenként egy paramétersor készül. Kezdetben minden sor az eredeti expected DATA-t használja; a Parameters fülön nézd át és igazítsd az elvárásokat. A létrehozás nem futtat CASE-t és nem módosítja az eredeti definíciót.
+
+Példa: rögzíts egy rendelést, készíts 0, 1 és 100 mennyiséget tartalmazó másolatot, majd háromsoros CASE-t. A valódi Spring beanek meghívása előtt határozd meg soronként az elvárt eredményt vagy kivételt.
+
+# 45. Bean Explorer {#bean-explorer}
+
+**Helye:** az MCP utáni **Beans** fő fül. A **Java REPL > Tools > Bean explorer** is megnyitja. Az Insert bean továbbra is külön, gyors deklarációs segítség.
+
+| Vezérlő | Mire való? |
+| --- | --- |
+| Name / type és Search / refresh | Keresés név/típus alapján, a lazy beanek példányosítása nélkül. Enterrel is indítható. |
+| Previous / Next | Lapozás, oldalanként 100 bean. |
+| Bean kijelölése | Scope, primary/lazy, qualifier, alias, factory/forrás és elérhető proxy/target metaadatok. |
+| Dependencies | Már feloldott függőségek és függő beanek. Dupla kattintással követhetők. Még nem inicializált kapcsolatok hiányozhatnak. |
+| Metódusválasztó | Támogatott publikus metódus kiválasztása pontos JVM-szignatúrával, overloadokkal együtt. |
+| Prepare method call... | Argumentumonként kompatibilis DATA választása és Java-kód beszúrása a munkafüzetbe. Nem hívja meg a beant és nem tölti vissza a DATA-t. |
+
+A DATA-javaslatok a deklarált típuson és óvatos raw-type illeszthetőségen alapulnak. Ezek jelöltek, nem minden mező sikeres konverziójának bizonyítékai. Ha nincs találat, előbb készíts vagy szerkessz a megfelelő típusú DATA-t. A biztonságosan meg nem nevezhető generikus szignatúrák nem választhatók.
+
+Nézd át a generált kódot, használd a Check code funkciót, majd külön futtasd. Ez az utolsó lépés már deszerializál, lazy beant példányosíthat és valódi mellékhatást indíthat. A proxy-metaadat megfigyelés; az Explorer nem cseréli le és nem kerüli meg a Spring proxyt.
+
+# 46. Watch és mezőváltozások {#watches}
+
+**Helye:** Java REPL eredményterület > **Watches**. A **Watch result** gomb `last1` alapértékkel nyitja a rögzítést; Pin watch alatt más sessionváltozó is megadható.
+
+| Vezérlő / nézet | Jelentés |
+| --- | --- |
+| Pin watch... | Változó/mező/index/kulcs útvonal: például last1.items[0].total vagy last1.items.size(). A hozzáadás még nem mintavételez. |
+| Allow Java expression / method calls | Külön engedély tetszőleges Java-kifejezésre. Ez minden REPL-értékelés után alkalmazáskódot futtathat. Alapból kikapcsolt. |
+| Refresh values | Kifejezett mintavétel az aktuális futtatási beállításokkal. Nincs watchokat értékelő időzítő. |
+| Remove | A kijelölt watch eltávolítása ebből a sessionből. |
+| Current / Previous | Az utolsó két leválasztott megjelenítési másolat kinyitása. |
+| Changed fields | A korlátozott mezőútvonalak és értékek összehasonlítása. |
+
+A mintavétel kifejezett REPL-futtatás után történik, és nem cseréli le a last1/last2 értékét vagy az eredmény handle-jét. Az alapútvonal mezőket és biztonságos JDK-konténerhozzáférést használ; alkalmazásgettereket nem hív, a betöltetlen Hibernate-kapcsolatokat nem inicializálja.
+
+Állapotok: FIRST, CHANGED, UNCHANGED, PARTIAL és ERROR. A PARTIAL, a korlát és az olvashatatlan mező nem bizonyít egyenlőséget. Hiba után a korábbi sikeres érték ERROR jelzéssel maradhat látható; ez nem friss eredmény. Sessionönként legfeljebb 20 watch és korlátozott before/after előnézet él. Reset/kapcsolatbontás törli őket. Az IDE és az MCP watchai a külön sessionjükhöz tartoznak.
+
+# 47. Aszinkron flow és tranzakcióhatárok {#async-flow}
+
+**Helye:** New recording... > **Link Executor / @Async / CompletableFuture tasks**. Az IDE párbeszédablakában alapból be van jelölve; MCP-indításnál külön `async="true"` szükséges. A képességhez indítsd újra a célalkalmazást a friss agenttel.
+
+Az **Async handoff** csomópont összeköti a megfigyelt beküldőt a támogatott executoron futó munkával. A feladathatárt szaggatott él jelzi. Látható a queueWaitMs, beküldési idő, tasktípus, induláskori cancelled állapot, valamint a beküldő és végrehajtó szál aktív tranzakciójának jelzése. A munkaszál Java-gyermekére kattintva nyílik meg a forrás és az adat; a szintetikus határnak nincs alkalmazásforrása.
+
+Az adapter ThreadPoolExecutor, ForkJoinPool, Spring ThreadPoolTaskExecutor és SimpleAsyncTaskExecutor végrehajtást figyel. A csomagolt agent tesztjei Java 17/21-en CompletableFuture-folytatásokat és Spring @Async hívást is lefednek. A kapcsolt munkaszál SQL/ORM-művelete ugyanahhoz a gyökérhez tartozik, a tényleges szálazonosító megőrzésével.
+
+**Csak a felvétel azonosítása kerül át.** A REPL nem másol tranzakciót, security/tenant adatot, MDC-t vagy tetszőleges ThreadLocal értéket. A szülő ROLLBACK tranzakciója ezért nem garantálja a munkaszál DB-írásának visszagörgetését. A nem Async folytatás helyben is lefuthat; egyedi executor, virtual-thread executor, Reactor és távoli üzenetsor általános követése nincs megvalósítva.
+
+Legfeljebb 1024 várakozó taskazonosság él, ötperces élettartammal. Azonos Runnable bizonytalan párhuzamos újrafelhasználása, lejárat, GC és túlcsordulás el nem kapcsolt/eldobott bizonyítékként jelenik meg. A várakozó munka hiányossá teszi a mérést; Stop után az el nem indult kapcsolatokat elengedi. A gráf nem talál ki hiányzó szülőt. A határ taskvégrehajtást jelent, nem minden Future garantált sikerét; a Future belsejében elnyelt kivételhez a Java-gyermek eredményét is nézd meg.
+
+A 4-es felvételformátum tárolja az explicit szálváltást és az async availability/pending/drop metaadatokat. A korábbi fájlok továbbra is olvashatók. A rögzítés és a fájl megnyitása nem folytat egy megállított stacket.
+
+# 48. HotSwap és érintett CASE-ek áttekintése {#affected-cases}
+
+**Helye:** Cases / Reload > **Reload + affected CASEs...**. Előbb válaszd ki a teljes újratöltendő Java-forrást, ahogy a Reload + run selected használatánál.
+
+A plugin futtatás nélkül feldolgozza a forrást, majd az osztályneveket összeveti a CASE-ek **Observed classes** mezőjével. Az áttekintő párbeszédablakban a megfigyelt egyezések alapból kijelöltek. Külön jelölést kap az ismeretlen lefedettség és a megfigyelt egyezés hiánya; ezek az esetek is lehetnek érintettek. Legfeljebb 20 CASE választható.
+
+Először a kiválasztott forrás HotSwapja történik meg. A mentett CASE-ek csak sikeres frissítés után futnak. Nem támogatott szerkezeti módosítás, fordítási hiba és megszakítás leállítja a munkafolyamatot. A CASE-szerkesztő módosításait külön mentsd el; mentett definíciók futnak. Nincs minden fájlmentésre automatikusan újraindított üzleti kód.
+
+## Összehasonlítás az előző futással
+
+A riport előtte/utána kimenetelt, eredménylenyomatot, kivételt, SQL/ORM-számlálókat és időtartamot mutat, ahol van bizonyíték. Az első futás sessionalapot készít. CASE, DATA-verzió, Spring-context vagy futtatási beállítás módosítása esetén a régi alap nem összehasonlítható. A HotSwap így egyébként változatlan feltételek mellett vizsgálható.
+
+Hiányzó/részleges számláló UNKNOWN. Az eredménylenyomat kanonikus, leválasztott JSON-ra vonatkozik, nem élő objektumazonosságra. Egy időmérés diagnosztikai támpont, nem teljesítményromlás bizonyítéka. A PASSED/FAILED eredményt az assertionök és a kifejezett korlátok döntik el. Az alapok és részletes eredmények sessionhöz kötöttek; a legutóbbi 20 CASE-riport marad meg.
+
+# 49. MCP: új eszközök, események és feladatok {#mcp-workflows}
+
+A katalógus már **82 eszközös**. Az új munkafolyamatokat az alábbi 16 eszköz éri el. A meglévő allowlist és külön execution, snapshot-write, capture, CASE-run, HotSwap és recording-sharing beállítás továbbra is érvényes.
+
+| Eszköz | Művelet |
+| --- | --- |
+| repl_bean_search | Bean név/típus keresés, oldalanként 100 sor. |
+| repl_bean_info | Definíció, proxy, függőségek és szignatúrák. |
+| repl_bean_compatible_data | DATA-jelöltek egy metódusparaméterhez. |
+| repl_bean_prepare | Csak Java-előkészítés; eval előtt áttekintendő. |
+| repl_snapshot_edit_read | Leválasztott payload/típus/forráschecksum. |
+| repl_snapshot_edit_validate | Típusos deszerializálási próba; execution kell. |
+| repl_snapshot_edit_copy | Új névre ment; execution és snapshot writes kell. |
+| repl_case_variants | Paraméterezett CASE másolása, futtatás nélkül. |
+| repl_case_affected | Javasolt esetek megfigyelt osztályok alapján; nincs reload/run. |
+| repl_watch_add | Sessionwatch; allow-java külön engedélyezendő. |
+| repl_watch_list | Watchazonosítók és utolsó állapot. |
+| repl_watch_get | Utolsó before/after másolat és eltérések. |
+| repl_watch_remove | Sessionwatch eltávolítása. |
+| repl_watch_refresh | Kifejezett mintavétel MCP-futtatási móddal. |
+| repl_recording_case_info | Teljes DATA elérhetősége az élő IDE-felvételben. |
+| repl_recording_case_create | Tartós DATA/CASE létrehozása a rögzített hívásból. |
+
+A `repl_recording_start` új string boolean mezői: `capture-data` és `async`, MCP esetén alapból mindkettő false. CASE-létrehozáshoz execution, snapshot writes és Share IDE recordings kell. A létrehozás nem hívja újra a metódust. A külön MCP-evaluator a mentett CASE-t később saját futtatási módjával és CASE-run jogosultságával futtathatja.
+
+## Eseményfeliratkozás
+
+A standard MCP-resource címe **repl://session/events**. A kliens listázza/olvassa, majd resources/subscribe művelettel feliratkozik. Az azonos sessionnel hitelesített GET /mcp, Accept: text/event-stream kapcsolaton resources/updated jelzések és taskállapot-értesítések érkeznek. A metadata lekéréséhez a kliens újraolvassa a resource-ot. Java-kód és rögzített érték nem kerül broadcastba.
+
+A runtime napló capture-befejezést, contextváltozást, futtatási/CASE-befejezést és rögzített hívásokat jelez. Engedélyezett recording sharing mellett a közös IDE-felvétel változása is frissítési jelzést ad. A szerver belül másodpercenként lekérdezi a metaadatot; az AI-nak nem kell folyamatosan toolokat pollolnia. A resources/unsubscribe leállítja az előfizetést. Kliensenként egy folyam van; rövid újracsatlakozásnál Last-Event-ID használható.
+
+A runtime 128 eseményt, az SSE 256 értesítést tart meg. A hiány és a lejárt replay látható: olvasd újra a resource/task állapotot, majd régi event ID nélkül kapcsolódj. A session és az események helyiek, hitelesítettek és elkülönítettek. A feliratkozás önmagában nem tart életben korlátlanul egy tétlen sessiont.
+
+## Azonosítható hosszú futások
+
+MCP 2025-11-25 esetén az eval, CASE run/batch, reload és watch refresh opcionális task mezőt fogad a tools/call kérésben. Az első válasz working taskazonosítót ad. Tasks/get vagy notifications/tasks/status mutatja az állapotot; tasks/result adja az eredeti toolválaszt. Tasks/list a kliens saját megőrzött feladatait mutatja. Tasks/cancel kooperatív megszakítást kér és végleg cancelled állapotra vált; nem vonja vissza a mellékhatást, és nem szabadítja fel azonnal a még futó evaluatort.
+
+Sessionönként legfeljebb 20 task marad meg. A TTL korlátozott, tényleges értékét a szerver közli. Az eredmény memóriában él, session/szerver megszűnésével elvész. Transporthiba után a task hibariportja megmarad, de a session további futtatást nem enged. Bizonytalan műveletet ne küldj újra automatikusan. Taskot nem támogató klienssel a szokásos szinkron toolhívás használható; a tényleges támogatás az MCP-hosttól függ.
+
+Az [MCP tasks specifikáció](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks) ezt kísérleti protokollfunkcióként írja le. Az [MCP resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) és a [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) szabályozza a feliratkozást és az átvitelt.

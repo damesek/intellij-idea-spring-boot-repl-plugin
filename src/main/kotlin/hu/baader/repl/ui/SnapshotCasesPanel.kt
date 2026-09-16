@@ -40,8 +40,16 @@ class SnapshotCasesPanel(private val project: Project, private val service: Nrep
     private val teardownCode = JTextArea("", 4, 60)
     private val importsCode = JTextArea("", 3, 60)
     private val tags = JTextField(20)
+    private val observedClasses = JTextArea("",4,60)
     private val disabled = JCheckBox("Disabled")
     private val maxDuration = JTextField(8)
+    private val maxSql = JTextField(8)
+    private val maxRepetitions = JTextField(8)
+    private val ormLimits=linkedMapOf(
+        "max-hibernate-loads" to ("Maximum entity loads" to JTextField(8)),
+        "max-hibernate-flushes" to ("Maximum Hibernate flushes" to JTextField(8)),
+        "max-hibernate-lazy-loads" to ("Maximum lazy initializations" to JTextField(8)),
+        "max-hibernate-response-lazy-loads" to ("Maximum lazy loads during response handling" to JTextField(8)))
     private val report = JTextArea().apply { isEditable = false; lineWrap = true }
     private val status = JLabel("Save a case, then explicitly run it against the application. Service calls can have side effects.")
     private val reloadLabel = JLabel("No Java source selected for reload")
@@ -82,10 +90,16 @@ class SnapshotCasesPanel(private val project: Project, private val service: Nrep
                 "expected" to expected.selectedItem?.toString().orEmpty(), "type" to type.text.trim(), "variable" to variable.text.trim(), "code" to source.text, "expected-exception" to expectedException.text.trim(), "expected-message" to expectedMessage.text,
                 "result-expression" to resultExpression.text, "assertions-json" to assertions.text, "parameters-json" to parameters.text,
                 "setup" to setupCode.text, "teardown" to teardownCode.text, "imports" to importsCode.text,
-                "tags" to tags.text.trim(), "disabled" to disabled.isSelected.toString(), "max-duration-ms" to maxDuration.text.trim()),
+                "tags" to tags.text.trim(), "observed-classes" to observedClasses.text, "disabled" to disabled.isSelected.toString(), "max-duration-ms" to maxDuration.text.trim(), "max-sql-count" to maxSql.text.trim(), "max-sql-repetitions" to maxRepetitions.text.trim()) + ormLimits.mapValues { (_,value)->value.second.text.trim() },
                 { status.text = it["value"]; outcomes.remove(name.text.trim()); refresh() }, ::error)
         }
         button("Load selected", ::loadSelected)
+        button("Create variants…") {
+            val original=selectedNames().singleOrNull()?:run{error("Select one saved CASE");return@button}
+            val newName=Messages.showInputDialog(project,"New parameterized CASE name","Create variants",null)?:return@button
+            val inputs=Messages.showMultilineInputDialog(project,"DATA snapshot names, one per line. Every row initially uses the original expected DATA; review it before running.","Variant inputs","",null,null)?:return@button
+            service.request("case/variants",mapOf("name" to original,"target" to newName,"inputs" to inputs),{status.text=it["value"];refresh()},::error)
+        }
         button("Export JUnit ZIP", ::exportJUnit)
         button("Run saved cases") { run(selectedNames()) }
         button("Rerun failed") { run(outcomes.filterValues { it["outcome"] in setOf("FAILED", "ERROR", "INCONCLUSIVE") }.keys.toList()) }
@@ -107,7 +121,8 @@ class SnapshotCasesPanel(private val project: Project, private val service: Nrep
                 reloadDocument = null; reloadFile = file; reloadLabel.text = "Reload: ${file.name} · latest contents at each run"
             }
         }
-        button("Reload + run selected", ::reloadAndRun)
+        button("Reload + run selected") { reloadAndRun() }
+        button("Reload + affected CASEs…") { reloadAndRun(true) }
         table.selectionModel.addListSelectionListener { if (!it.valueIsAdjusting) selectedNames().firstOrNull()?.let { selected ->
             outcomes[selected]?.let { value -> showResult(selected, value) }
         } }
@@ -119,6 +134,7 @@ class SnapshotCasesPanel(private val project: Project, private val service: Nrep
             addTab("Code", JScrollPane(source))
             addTab("Assertions", editor("JSON options: include / ignore / unordered paths, numericTolerance / timeToleranceMs, checks. Paths use /items/*/id; empty path means root. Example: {\"ignore\":[\"/id\"],\"numericTolerance\":{\"/total\":0.01}}", assertions))
             addTab("Parameters", editor("Optional JSON array (1–20 rows): [{\"id\":\"small\",\"input\":\"input-small\",\"expected\":\"expected-small\"}]. Empty uses the selected DATA pair. Each row has a fresh session and transaction.", parameters))
+            addTab("Observed classes",editor("Classes observed when the recorded CASE was created (one per line). Used to suggest affected cases; this is partial evidence, not complete coverage.",observedClasses))
             addTab("Setup / cleanup", JPanel(GridLayout(3, 1)).apply {
                 add(editor("Imports (Java import statements):", importsCode))
                 add(editor("Setup (runs after input binding, before code):", setupCode))
@@ -127,6 +143,9 @@ class SnapshotCasesPanel(private val project: Project, private val service: Nrep
             addTab("Options", WorkbookToolbar().apply {
                 add(JLabel("Tags (comma-separated):")); add(tags); add(disabled)
                 add(JLabel("Maximum code duration (ms, optional):")); add(maxDuration)
+                add(JLabel("Maximum SQL executions (optional, 0 allowed):"));add(maxSql)
+                add(JLabel("Maximum SQL repetition (optional):"));add(maxRepetitions)
+                ormLimits.values.forEach { (label,field)->add(JLabel("$label (optional, 0 allowed):"));add(field) }
             })
         }
         val top = JPanel(BorderLayout()).apply { add(fields, BorderLayout.NORTH); add(codeTabs, BorderLayout.CENTER); add(controls, BorderLayout.SOUTH) }
@@ -158,13 +177,14 @@ Includes DATA fixtures: review before sharing. No code is run.""").apply { isEdi
             { status.text = "JUnit sources exported: ${target.file.absolutePath}" }, ::error)
     }
     private fun selectedNames() = table.selectedRows.map { model.getValueAt(table.convertRowIndexToModel(it), 0).toString() }
-    private fun reloadAndRun() {
+    private fun reloadAndRun(affected: Boolean = false) {
         if (workflow.busy || loadingSource) { error("Wait for the active workflow"); return }
         val names = selectedNames()
-        if (names.isEmpty() || names.size > 20) { error("Select 1–20 saved cases first"); return }
+        if (!affected && (names.isEmpty() || names.size > 20)) { error("Select 1–20 saved cases first"); return }
+        fun ready(text: String) { if(affected) chooseAffected(text) else run(names,text) }
         val file = reloadFile
         val document = reloadDocument ?: file?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
-        if (document != null) { run(names, document.text); return }
+        if (document != null) { ready(document.text); return }
         if (file == null) { error("Select the Java source to reload first"); return }
         loadingSource = true; val requestGeneration = generation
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -172,21 +192,42 @@ Includes DATA fixtures: review before sharing. No code is run.""").apply { isEdi
                 require(file.length <= 1_000_000) { "Java source exceeds 1 MB" }
                 val text = String(file.contentsToByteArray(), Charsets.UTF_8)
                 ApplicationManager.getApplication().invokeLater {
-                    if (!disposed && requestGeneration == generation) { loadingSource = false; run(names, text) }
+                    if (!disposed && requestGeneration == generation) { loadingSource = false; ready(text) }
                 }
             } catch (failure: Exception) { ApplicationManager.getApplication().invokeLater {
                 if (!disposed && requestGeneration == generation) { loadingSource = false; error(failure.message.orEmpty()) }
             } }
         }
     }
+    private fun chooseAffected(code: String) {
+        val ticket=generation;loadingSource=true
+        service.request("case/affected",mapOf("code" to code),{ plan ->
+            if(disposed||ticket!=generation)return@request
+            loadingSource=false
+            val affected=plan["affected"].orEmpty().lines().filter(String::isNotBlank)
+            val unknown=plan["unknown"].orEmpty().lines().filter(String::isNotBlank).toSet()
+            val others=(plan["unknown"].orEmpty().lines()+plan["unmatched"].orEmpty().lines()).filter(String::isNotBlank).distinct()
+            val checks=(affected+others).map { name->name to JCheckBox("$name · "+when(name){in affected->"observed match";in unknown->"coverage unknown";else->"no observed match"},name in affected) }
+            val selection=JPanel(GridLayout(0,1)).apply{checks.forEach { add(it.second) }}
+            val panel=JPanel(BorderLayout()).apply{
+                add(JTextArea("Reload: ${plan["classes"]}\n${plan["detail"]}\nSuggested cases are checked. Choose up to 20; execution uses the current transaction settings.").apply{isEditable=false;lineWrap=true;wrapStyleWord=true;rows=4},BorderLayout.NORTH)
+                add(JScrollPane(selection).apply{preferredSize=java.awt.Dimension(700,340)},BorderLayout.CENTER)
+            }
+            if(JOptionPane.showConfirmDialog(this,panel,"Review affected CASEs before reload",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)
+                if(!disposed&&ticket==generation)run(checks.filter{it.second.isSelected}.map{it.first},code)
+        },{if(ticket==generation){loadingSource=false;error(it)}})
+    }
     private fun showResult(case: String, result: Map<String, String>) {
         report.text = buildString {
             appendLine(case); appendLine(result["detail"].orEmpty())
             if (result.containsKey("execution-mode")) {
                 appendLine("Execution: ${result["execution-mode"]}; manager: ${result["transaction-manager"].orEmpty()}")
+                if(result["hibernate-loads"]!=null) appendLine("Hibernate: ${result["hibernate-loads"]} entity loads, ${result["hibernate-flushes"]} flushes, ${result["hibernate-lazy-loads"]} lazy, ${result["hibernate-response-lazy-loads"]} during response; partial=${result["hibernate-partial"]}")
+                if(result["sql-count"]!=null) appendLine("SQL: ${result["sql-count"]} executions, ${result["sql-duration-ms"]} ms, max repetition ${result["sql-max-repetitions"]}, partial=${result["sql-partial"]}")
                 appendLine("Transaction rolled back: ${result["transaction-rolled-back"] ?: "not confirmed"}; duration: ${result["execution-duration-ms"]} ms")
             }
             appendLine(result["out"].orEmpty()); appendLine(result["value"].orEmpty())
+            result["regression-json"]?.let { appendLine("Comparison with previous run:");appendLine(com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(com.google.gson.JsonParser.parseString(it))) }
             result["rows-json"]?.let { appendLine("Row details:"); appendLine(com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(com.google.gson.JsonParser.parseString(it))) }
         }
     }
@@ -207,7 +248,9 @@ Includes DATA fixtures: review before sharing. No code is run.""").apply { isEdi
             resultExpression.text = it["result-expression"].orEmpty(); assertions.text = it["assertions-json"].orEmpty().ifBlank { "{}" }
             parameters.text = it["parameters-json"].orEmpty(); setupCode.text = it["setup"].orEmpty(); teardownCode.text = it["teardown"].orEmpty()
             importsCode.text = it["imports"].orEmpty(); tags.text = it["tags"].orEmpty(); disabled.isSelected = it["disabled"] == "true"
-            maxDuration.text = it["max-duration-ms"].orEmpty()
+            observedClasses.text=it["observed-classes"].orEmpty()
+            maxDuration.text = it["max-duration-ms"].orEmpty(); maxSql.text = it["max-sql-count"].orEmpty(); maxRepetitions.text = it["max-sql-repetitions"].orEmpty()
+            ormLimits.forEach { (key,value)->value.second.text=it[key].orEmpty() }
             status.text = "Case loaded for review; no code executed"
         }, ::error)
     }

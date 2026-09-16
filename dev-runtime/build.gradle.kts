@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.20.0"
+version = "0.23.0"
 
 repositories {
     mavenCentral()
@@ -27,6 +27,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.springframework.boot:spring-boot-starter:3.5.6")
     testImplementation("org.springframework:spring-jdbc:6.2.11")
+    testImplementation("org.springframework.boot:spring-boot-starter-web:3.5.6")
+    testImplementation("org.springframework.boot:spring-boot-starter-data-jpa:3.5.6")
     testImplementation("com.h2database:h2:2.3.232")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.15.3")
     testImplementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3")
@@ -70,5 +72,5 @@ tasks.jar {
 
 // Ship the portable assertion source for ordinary JUnit exports.
 tasks.processResources {
-    from("src/main/java/com/baader/devrt/CaseAssertions.java") { into("case-export") }
+    from(listOf("src/main/java/com/baader/devrt/CaseAssertions.java", "src/main/java/com/baader/devrt/CaseSqlCounter.java", "src/main/java/com/baader/devrt/CaseHibernateProbe.java", "../repl-protocol/src/main/java/hu/baader/repl/protocol/SqlText.java")) { into("case-export") }
 }

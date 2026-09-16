@@ -9,6 +9,17 @@ import java.net.URI;
 import java.util.*;
 
 final class JavaCodeEvaluator {
+    static Set<String> sourceClasses(String source) throws Exception {
+        if(source==null||source.isBlank()||source.length()>1_000_000)throw new IllegalArgumentException("Provide a complete Java source file (up to 1 MB)");
+        var compiler=ToolProvider.getSystemJavaCompiler();if(compiler==null)throw new IllegalStateException("A full JDK is required");
+        var diagnostics=new DiagnosticCollector<JavaFileObject>();Set<String> names=new LinkedHashSet<>();
+        try(var files=compiler.getStandardFileManager(diagnostics,Locale.ROOT,null)){
+            var task=(JavacTask)compiler.getTask(null,files,diagnostics,List.of("-proc:none"),null,List.of(new Source("Source",source)));
+            var unit=task.parse().iterator().next();String prefix=unit.getPackageName()==null?"":unit.getPackageName()+".";
+            for(var declaration:unit.getTypeDecls())if(declaration instanceof ClassTree type)names.add(prefix+type.getSimpleName());
+        }
+        if(names.isEmpty()||diagnostics.getDiagnostics().stream().anyMatch(d->d.getKind()==Diagnostic.Kind.ERROR))throw new IllegalArgumentException("Java source could not be parsed");return names;
+    }
     static final class HotSwapResult {
         final boolean success; final String message, error;
         HotSwapResult(boolean success, String message, String error) { this.success = success; this.message = message; this.error = error; }

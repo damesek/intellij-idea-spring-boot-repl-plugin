@@ -17,6 +17,10 @@ internal data class McpRecordingState(
 internal interface McpRecordingAccess : AutoCloseable {
     fun read(): CompletableFuture<McpRecordingState>
     fun start(expected: String, classes: List<String>): CompletableFuture<McpRecordingState>
+    fun startSql(expected: String, classes: List<String>, sql: Boolean, threshold: Int): CompletableFuture<McpRecordingState> = start(expected,classes)
+    fun startHibernate(expected: String, classes: List<String>, sql: Boolean, threshold: Int, hibernate: Boolean): CompletableFuture<McpRecordingState> = startSql(expected,classes,sql,threshold)
+    fun startWorkflow(expected: String, classes: List<String>, sql: Boolean, threshold: Int, hibernate: Boolean, captureData: Boolean, async: Boolean): CompletableFuture<McpRecordingState> = startHibernate(expected,classes,sql,threshold,hibernate)
+    fun experiment(recording: String, call: Long, name: String?, bean: String, actor: String): CompletableFuture<Map<String,String>> = CompletableFuture.failedFuture(IllegalStateException("Full replay DATA is unavailable"))
     fun stop(recording: String): CompletableFuture<McpRecordingState>
     fun select(recording: String, call: Long): CompletableFuture<McpRecordingState>
 }
@@ -45,6 +49,33 @@ internal class IdeMcpRecordingAccess(private val project: Project) : McpRecordin
     override fun start(expected: String, classes: List<String>) = dispatch { controller ->
         require((controller.recording?.id ?: "none") == expected) { "Recording changed; read repl_recording_status before starting" }
         controller.start(classes).thenApply { snapshot(controller) }
+    }
+    override fun startSql(expected: String, classes: List<String>, sql: Boolean, threshold: Int) = dispatch { controller ->
+        require((controller.recording?.id ?: "none") == expected) { "Recording changed; read status before starting" }
+        controller.start(classes,sql,threshold).thenApply { snapshot(controller) }
+    }
+    override fun startHibernate(expected: String, classes: List<String>, sql: Boolean, threshold: Int, hibernate: Boolean) = dispatch { controller ->
+        require((controller.recording?.id ?: "none") == expected) { "Recording changed; read status before starting" }
+        controller.start(classes,sql,threshold,hibernate).thenApply { snapshot(controller) }
+    }
+    override fun startWorkflow(expected: String, classes: List<String>, sql: Boolean, threshold: Int, hibernate: Boolean, captureData: Boolean, async: Boolean) = dispatch { controller ->
+        require((controller.recording?.id ?: "none") == expected) { "Recording changed; read status before starting" }
+        controller.start(classes,sql,threshold,hibernate,captureData,async).thenApply { snapshot(controller) }
+    }
+    override fun experiment(recording: String, call: Long, name: String?, bean: String, actor: String): CompletableFuture<Map<String,String>> {
+        val result=CompletableFuture<Map<String,String>>()
+        ApplicationManager.getApplication().invokeLater {
+            try {
+                check(!closed.get() && !project.isDisposed) { "Recording access closed" }
+                val controller=RecordingController.get(project)
+                require(!controller.offline && controller.recording?.id==recording && controller.recording!!.calls.any { it.id()==call }) { "Live recording or call changed" }
+                val args=mutableMapOf("recording" to recording,"call-id" to call.toString(),"bean" to bean,"audit-actor" to actor)
+                if(name!=null)args["name"]=name
+                hu.baader.repl.nrepl.NreplService.getInstance(project).request(if(name==null)"trace/case-info" else "trace/case-create",args,
+                    {result.complete(it)},{result.complete(mapOf("err" to it))})
+            }catch(e:Exception){result.completeExceptionally(e)}
+        }
+        return result
     }
     override fun stop(recording: String) = dispatch { controller ->
         require(controller.recording?.id == recording) { "Recording changed; no recording was stopped" }

@@ -67,7 +67,7 @@ class McpRouterTest {
             assertEquals(200, router.handle(request("ping", session = session)).status)
             assertEquals(202, router.handle(request("notifications/initialized", session = session, id = null)).status)
             assertTrue(result(router.handle(request("tools/list", session = session))).getAsJsonArray("tools").size() > 20)
-            assertEquals(405, router.handle(McpHttpRequest("GET", "/mcp", headers)).status)
+            assertEquals(404, router.handle(McpHttpRequest("GET", "/mcp", headers)).status)
             assertEquals(1, router.clientCount)
             assertEquals(200, router.handle(McpHttpRequest("DELETE", "/mcp", headers + ("MCP-Session-Id" to session))).status)
             assertTrue(backend.closed)

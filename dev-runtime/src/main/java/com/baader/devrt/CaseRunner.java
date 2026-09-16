@@ -40,7 +40,8 @@ final class CaseRunner {
     }
     static Map<String,Object> compact(Map<String,Object> result) {
         Map<String,Object> copy=new LinkedHashMap<>();
-        for(String key:List.of("row","outcome","detail","value","out","duration-ms","code-duration-ms","event","execution-mode","transaction-manager","transaction-rolled-back","teardown","run-id","rows-completed","rows-total")) {
+        for(String key:List.of("result-sha256","exception-type","exception-message","baseline-identity","regression-json"))if(result.containsKey(key))copy.put(key,result.get(key));
+        for(String key:List.of("row","outcome","detail","value","out","duration-ms","code-duration-ms","sql-count","sql-duration-ms","sql-max-repetitions","sql-partial","hibernate-loads","hibernate-flushes","hibernate-lazy-loads","hibernate-response-lazy-loads","hibernate-partial","event","execution-mode","transaction-manager","transaction-rolled-back","teardown","run-id","rows-completed","rows-total")) {
             Object value=result.get(key);if(value!=null)copy.put(key,value instanceof String?clean(value,Set.of("value","out").contains(key)?2048:512):value);
         }
         return copy;

@@ -83,6 +83,23 @@ internal class RecordingMcpHarness(
 }
 
 class McpRecordingTest {
+    @Test fun queuedAsyncWorkInvalidatesTheEventResourceBeforeAnyCallCompletes() {
+        RecordingMcpHarness().use { h ->
+            val session = h.connect()
+            val before = h.ok(session, "repl_recording_status")["view"].asString
+            val backend = h.backends.single()
+            val first = backend.request("notifications/poll", emptyMap()).get().getValue("ide-recording-revision")
+            val record = h.access.state.recording!!
+            h.access.state = h.access.state.copy(recording = record.copy(async = AsyncEvidence(true, true, 1, 0)))
+            val second = backend.request("notifications/poll", emptyMap()).get().getValue("ide-recording-revision")
+            assertNotEquals(first, second)
+            val status = h.ok(session, "repl_recording_status")
+            assertNotEquals(before, status["view"].asString)
+            assertFalse(status["complete"].asBoolean)
+            h.failed(session, "repl_recording_calls", "recording" to record.id, "view" to before)
+        }
+    }
+
     @Test fun permissionsGateSharingAndMutationsWithoutBorrowingTheIdeEvaluator() {
         RecordingMcpHarness(permissions = McpPermissions(execution = true, captureChanges = true)).use { h ->
             val session = h.connect()
@@ -104,7 +121,7 @@ class McpRecordingTest {
         }
         assertFalse(McpRecordingTools.all.single { it.operation == "recording/start" }.enabled(McpPermissions(recordingAccess=true, execution=true)))
         assertFalse(McpRecordingTools.all.first().enabled(McpPermissions(recordingAccess=true, allowedTools=emptySet())))
-        assertEquals(60, McpTools.all.size); assertEquals(60, McpTools.all.map { it.name }.toSet().size)
+        assertEquals(82, McpTools.all.size); assertEquals(82, McpTools.all.map { it.name }.toSet().size)
     }
 
     @Test fun filteredGraphPagesKeepCallerPathsAndTimelineUsesRecordedThreads() {

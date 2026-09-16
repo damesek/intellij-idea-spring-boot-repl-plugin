@@ -39,11 +39,12 @@ internal data class McpTool(
         if (operation in setOf("recording/start", "recording/stop") && !permissions.captureChanges) return false
         if (execution && !permissions.execution || reload && !permissions.reload) return false
         if (operation == "snapshot/delete" && !permissions.snapshotDelete) return false
-        if (operation in setOf("snapshot/save", "snapshot/import", "case/save", "reproduction/create", "snapshot/restore-version", "workspace/export-file", "workspace/import-file") && !permissions.snapshotWrites) return false
+        if (operation in setOf("snapshot/edit-copy", "case/variants", "recording/case-create", "snapshot/save", "snapshot/import", "case/save", "reproduction/create", "snapshot/restore-version", "workspace/export-file", "workspace/import-file") && !permissions.snapshotWrites) return false
         if (operation in setOf("case/run", "case/run-batch") && !permissions.caseRuns) return false
         if ((operation.startsWith("capture/") || operation.startsWith("trace/")) && execution && !permissions.captureChanges) return false
         return true
     }
+    val taskSupport get() = operation in setOf("eval", "case/run", "case/run-batch", "class-reload", "watch/refresh")
     fun descriptor() = McpJson.objectOf("name" to name, "description" to description,
         "inputSchema" to McpJson.objectOf("type" to "object", "properties" to parameters.associate { it.name to it.schema() },
             "required" to parameters.filter { it.required }.map { it.name }, "additionalProperties" to false),
@@ -65,6 +66,8 @@ internal data class McpTool(
                 // JSON Schema integers can also be written as 1.0 or 1e0; nREPL expects decimal integer strings.
                 put(p.name, if (p.maxInteger == null) primitive.asString else primitive.asBigDecimal.longValueExact().toString())
             }
+            for(flag in listOf("async","capture-data","allow-java"))if(get(flag)?.let { it !in setOf("true","false") }==true)throw McpError(-32602,"$flag must be true or false")
+            if(operation in setOf("recording/case-info","recording/case-create") && get("call").isNullOrEmpty())throw McpError(-32602,"call is required")
             if (operation == "complete" && (get("cursor")?.toInt() ?: 0) > getValue("code").length)
                 throw McpError(-32602, "Cursor must be within code (UTF-16 offset)")
             if (operation in setOf("inspector/start", "snapshot/save", "snapshot/pin") &&
@@ -73,11 +76,16 @@ internal data class McpTool(
             if (get("limit") == "0") throw McpError(-32602, "Limit must be at least 1")
             if (operation.startsWith("recording/")) {
                 if (get("text-limit") == "0") throw McpError(-32602, "Text limit must be at least 1")
+                if(get("sql")?.let { it !in setOf("true","false") } == true) throw McpError(-32602,"sql must be true or false")
+                if(get("hibernate")?.let { it !in setOf("true","false") } == true) throw McpError(-32602,"hibernate must be true or false")
+                if(get("hibernate")=="true" && get("sql")=="false") throw McpError(-32602,"Hibernate recording requires SQL recording")
+                if(operation=="recording/hibernate" && get("kind")?.let { it !in hu.baader.repl.protocol.HibernateObservation.KINDS } == true) throw McpError(-32602,"Unknown Hibernate event kind")
+                if(get("n-plus-one-threshold")?.toInt()?.let { it < 2 } == true) throw McpError(-32602,"N+1 threshold must be 2–1000")
                 if (get("errors-only")?.let { it !in setOf("true", "false") } == true) throw McpError(-32602, "errors-only must be true or false")
                 if (containsKey("from-ms") != containsKey("to-ms") ||
                     containsKey("from-ms") && getValue("from-ms").toLong() > getValue("to-ms").toLong())
                     throw McpError(-32602, "Supply an ordered from-ms / to-ms pair")
-                if (operation == "recording/compare" && listOf("before", "reference").count { !get(it).isNullOrBlank() } != 1)
+                if (operation in setOf("recording/compare", "recording/sql-compare", "recording/hibernate-compare") && listOf("before", "reference").count { !get(it).isNullOrBlank() } != 1)
                     throw McpError(-32602, "Supply exactly one of before or reference")
                 if (operation == "recording/values" && get("part") !in setOf("input", "result", "exception"))
                     throw McpError(-32602, "part must be input, result or exception")
@@ -147,10 +155,10 @@ internal object McpTools {
             text("parameters-json", "JSON array of 1–20 objects containing id, input, expected", max=65536),
             text("result-expression", "Optional final Java expression; required for JUnit export", max=100000),
             text("imports", "Java import statements", max=16384), text("setup", "Java setup code", max=100000), text("teardown", "Java cleanup code", max=100000),
-            text("tags", "Comma-separated tags", max=1024), text("disabled", "true or false"), number("max-duration-ms", "Optional code duration assertion, minimum 1", 120000)), execution = true),
+            text("observed-classes", "Newline-separated classes observed in a recording; incomplete coverage", max=32768), text("tags", "Comma-separated tags", max=1024), text("disabled", "true or false"), number("max-duration-ms", "Optional code duration assertion, minimum 1", 120000), number("max-sql-count", "Maximum synchronous JDBC executions, including failed SQL; 0 allowed", 1000000), number("max-sql-repetitions", "Maximum repetitions per root, datasource and SQL template", 1000000), number("max-hibernate-loads", "Maximum Hibernate entity loads; requires 6.6 adapter", 1000000), number("max-hibernate-flushes", "Maximum actual Hibernate flushes", 1000000), number("max-hibernate-lazy-loads", "Maximum lazy entity/collection/attribute initializations", 1000000), number("max-hibernate-response-lazy-loads", "Maximum lazy initializations during MVC response handling", 1000000)), execution = true),
         McpTool("repl_case_run", "case/run", "Run a saved snapshot case in a temporary evaluator. Spring beans and application effects are shared; this is not a sandbox.", listOf(name), execution = true),
         McpTool("repl_reload", "class-reload", "Compile complete Java source and HotSwap supported method-body changes in the running JVM. Requires Allow HotSwap. No automatic retry; structural changes may require restart.", listOf(code), execution = true, reload = true)
-    ) + McpRecordingTools.all
+    ) + McpRecordingTools.all + McpWorkflowTools.all
 
     fun result(tool: McpTool, arguments: Map<String, String>, response: Map<String, String>): JsonObject {
         if (tool.operation.startsWith("recording/") && response.containsKey("recording-json"))

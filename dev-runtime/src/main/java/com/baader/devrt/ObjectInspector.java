@@ -52,8 +52,11 @@ final class ObjectInspector {
     Map<String, Object> page(int offset) {
         if (offset < 0 || offset > MAX_OFFSET) throw new IllegalArgumentException("Inspector offset must be between 0 and 9950");
         Object value = current(); children.clear(); revision = UUID.randomUUID().toString();
+        Object original=value;
+        HibernateAccess.View orm=HibernateAccess.view(value);
+        if(orm!=null)value=orm.contents();
         boolean more = false;
-        if (value != null && !scalar(value)) {
+        if (value != null && !scalar(value) && (orm==null || !orm.opaque())) {
             if (value.getClass().isArray()) {
                 int size = Array.getLength(value);
                 for (int i=offset; i<Math.min(size, offset+PAGE_SIZE); i++) add("["+i+"]", Array.get(value,i));
@@ -79,11 +82,14 @@ final class ObjectInspector {
                 List<Field> fields = new ArrayList<>();
                 for (Class<?> type=value.getClass(); type!=null && fields.size()<=10000; type=type.getSuperclass())
                     for (Field field : type.getDeclaredFields())
-                        if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) fields.add(field);
+                        if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic() && !field.getName().startsWith("$$_hibernate_")) fields.add(field);
                 fields.sort(Comparator.comparing(f -> f.getDeclaringClass().getName()+"."+f.getName()));
                 for (int i=offset; i<Math.min(fields.size(),offset+PAGE_SIZE); i++) {
                     Field field=fields.get(i);
                     String label=field.getDeclaringClass().getSimpleName()+"."+field.getName();
+                    if(orm!=null&&orm.unfetched().contains(field.getName())) {
+                        children.add(new Child(label,null,"Unfetched Hibernate attribute; not read"));continue;
+                    }
                     try {
                         if (!field.trySetAccessible()) throw new IllegalAccessException("Field is not open to the agent");
                         add(label,field.get(value));
@@ -100,9 +106,14 @@ final class ObjectInspector {
             rows.add(i+"\t"+text(child.label(),256)+"\t"+text(typeName(child.value()),512)+"\t"+preview(child.value())+"\t"+text(child.error(),256));
         }
         Map<String,Object> result = new LinkedHashMap<>(Map.of("value",String.join("\n",rows),"revision",revision,"offset",offset,"has-more",more,
-                "scan-limited",more && offset==MAX_OFFSET,"depth",stack.size(),"type",typeName(value),"preview",preview(value),
+                "scan-limited",more && offset==MAX_OFFSET,"depth",stack.size(),"type",typeName(original),"preview",preview(original),
                 "path",String.join(" / ",stack.stream().map(Node::label).toList())));
-        result.putAll(ValuePresentation.present(value));
+        result.putAll(ValuePresentation.present(original));
+        if(orm!=null) {
+            orm.metadata().forEach((key,text)->result.put("hibernate-"+key,text));
+            result.put("hibernate-expanded",!orm.opaque());
+            result.put("hibernate-note",orm.opaque()?"Not expanded; inspecting does not initialize a Hibernate proxy or collection":"Already loaded values only; inspecting does not initialize relationships");
+        }
         result.put("bookmark-path", String.join(".", stack.stream().skip(1).map(n -> Base64.getUrlEncoder().withoutPadding().encodeToString(n.label().getBytes(java.nio.charset.StandardCharsets.UTF_8))).toList()));
         return result;
     }

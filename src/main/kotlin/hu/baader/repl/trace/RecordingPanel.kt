@@ -31,12 +31,19 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
     private val cache=CallPresentationCache()
     private var presentations=emptyMap<Long,CallPresentation>()
     private val zoomLabel=JLabel("100%")
-    private val graph=CallGraph({ controller.select(it.id()) }, { updateZoom();pauseFollowing() })
-    private val timeline=CallTimeline({ controller.select(it) }, { range=it;filterChanged() })
+    private val graph=CallGraph({ selectNode(it.id()) }, { updateZoom();pauseFollowing() })
+    private val timeline=CallTimeline({ selectNode(it) }, { range=it;filterChanged() })
     private val graphTabs=JTabbedPane()
     private val values=JPanel(BorderLayout())
     private val comparison=CallComparisonPanel()
     private val detailTabs=JTabbedPane()
+    private val sqlPanel=RecordingSqlPanel { controller.select(it) }
+    private val hibernatePanel=RecordingHibernatePanel({ controller.select(it) }) { name ->
+        val type=com.intellij.psi.JavaPsiFacade.getInstance(project).findClass(name.replace('$','.'),com.intellij.psi.search.GlobalSearchScope.allScope(project))
+        if(type?.canNavigate()==true)type.navigate(true) else controller.error("Entity mapping source is not available in this project: $name")
+    }
+    private val groupSql=JCheckBox("Group SQL",true)
+    private var sqlSelected: Long?=null
     private val status=textArea(2)
     private val sourceNote=textArea(2)
     private val filterNote=JLabel()
@@ -58,6 +65,7 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
     private val save=JButton("Save recording…")
     private val load=JButton("Open recording…")
     private val live=JButton("Inspect live")
+    private val experiment=JButton("Create CASE from call…")
     private val previous=JButton("Previous")
     private val next=JButton("Next")
     private val nextError=JButton("Next error")
@@ -87,6 +95,17 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         live.toolTipText="Inspect the current live object; it may have changed since recording and expires after five minutes."
         live.addActionListener { controller.selectedCall()?.takeIf(controller::live)?.let { inspect(mapOf("event" to it.event().toString())) } }
         recordingBar.add(live)
+        experiment.addActionListener { createCase() };recordingBar.add(experiment)
+        graph.addMouseListener(object:java.awt.event.MouseAdapter(){
+            private fun popup(e:java.awt.event.MouseEvent){
+                if(!e.isPopupTrigger)return
+                val node=graph.nodes.firstOrNull { it.bounds.contains(java.awt.geom.Point2D.Double(e.x/graph.zoom,e.y/graph.zoom)) }?:return
+                selectNode(node.call.id())
+                JPopupMenu().apply{add(JMenuItem("Create CASE from this call…").apply{isEnabled=!controller.offline && node.call.id()<RecordingHibernate.BASE && node.call.className() !in setOf("async.Task","http.Request");addActionListener{createCase()}});show(graph,e.x,e.y)}
+            }
+            override fun mousePressed(e:java.awt.event.MouseEvent)=popup(e)
+            override fun mouseReleased(e:java.awt.event.MouseEvent)=popup(e)
+        })
         add(recordingBar,BorderLayout.NORTH)
 
         val searchBar=WorkbookToolbar()
@@ -102,6 +121,7 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         })
         val filterBar=WorkbookToolbar()
         errors.addActionListener { filterChanged() };minimum.addChangeListener { if(!updating) filterChanged() }
+        groupSql.addActionListener { redraw() };filterBar.add(groupSql)
         filterBar.add(errors);filterBar.add(JLabel("Min ms:"));filterBar.add(minimum)
         follow.addActionListener { controller.followLatest=follow.isSelected };filterBar.add(follow)
         inline.addActionListener { controller.inline=inline.isSelected };filterBar.add(inline)
@@ -149,7 +169,8 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
             addMouseWheelListener { pauseFollowing() }
         })
         graphTabs.addTab("Timeline",JScrollPane(timeline).apply { minimumSize=Dimension(150,120) })
-        detailTabs.addTab("Values",values);detailTabs.addTab("Compare calls",comparison)
+        detailTabs.addTab("Values",values);detailTabs.addTab("Compare calls",comparison);detailTabs.addTab("SQL & N+1",sqlPanel);detailTabs.addTab("Hibernate",hibernatePanel)
+        detailTabs.addChangeListener { pendingDivider=true;orient() }
         val detail=JPanel(BorderLayout()).apply { add(detailTabs,BorderLayout.CENTER);add(sourceNote,BorderLayout.SOUTH);minimumSize=Dimension(180,120) }
         split.leftComponent=graphTabs;split.rightComponent=detail;split.resizeWeight=0.5;split.dividerLocation=520
         browser.add(split,BorderLayout.CENTER);browserHost.add(browser,BorderLayout.CENTER)
@@ -174,7 +195,7 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         val orientation=if(vertical) JSplitPane.VERTICAL_SPLIT else JSplitPane.HORIZONTAL_SPLIT
         if(split.orientation!=orientation) { split.orientation=orientation;pendingDivider=true }
         if(pendingDivider && split.height>0 && split.width>0) {
-            split.dividerLocation=if(vertical) (split.height*0.48).toInt() else split.width/2
+            split.dividerLocation=if(vertical) (split.height*(if(detailTabs.selectedIndex>=2) 0.30 else 0.48)).toInt() else split.width/2
             pendingDivider=false
         }
     }
@@ -200,6 +221,13 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
     }
     private fun currentFilter() = CallFilter(search.text,errors.isSelected,(minimum.value as Number).toDouble(),
         (threads.selectedItem as? Choice)?.id,range,focus)
+    private fun selectNode(id: Long) {
+        if(id >= RecordingSql.BASE) {
+            sqlSelected=id;detailTabs.selectedIndex=2;sqlPanel.selectSql(id-RecordingSql.BASE);redraw()
+        } else if(id>=RecordingHibernate.BASE) {
+            sqlSelected=id;detailTabs.selectedIndex=3;hibernatePanel.selectHibernate(id-RecordingHibernate.BASE);redraw()
+        } else { sqlSelected=null;controller.select(id) }
+    }
     private fun filterChanged() {
         if(updating || disposed) return
         controller.followLatest=false;follow.isSelected=false;redraw()
@@ -211,7 +239,7 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         searchTimer.stop();filterChanged()
     }
     private fun step(direction: Int,errorOnly: Boolean=false) {
-        CallNavigation.adjacent(matches,controller.selected,direction,errorOnly)?.let { controller.select(it.id()) }
+        CallNavigation.adjacent(matches,controller.selected,direction,errorOnly)?.let { selectNode(it.id()) }
     }
     private fun updateNavigation() {
         previous.isEnabled=CallNavigation.adjacent(matches,controller.selected,-1)!=null
@@ -224,22 +252,47 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
     }
     fun configure(initial: String = "") {
         val input=JTextArea(initial,7,54)
+        val jdbc=JCheckBox("Record JDBC/SQL and synchronous Spring MVC requests",true)
+        val hibernate=JCheckBox("Record Hibernate 6.6 entity / session events",true)
+        val async=JCheckBox("Link Executor / @Async / CompletableFuture tasks (recording identity only)",true)
+        val captureData=JCheckBox("Capture replay DATA (uses snapshot serializers; 2 MiB per input/result)",false)
+        jdbc.addActionListener { hibernate.isEnabled=jdbc.isSelected }
+        val threshold=JSpinner(SpinnerNumberModel(5,2,1000,1))
         val dialog=object : DialogWrapper(project) {
             init { title="Record application class calls";init() }
             override fun createCenterPanel()=JPanel(BorderLayout(0,8)).apply {
-                add(JLabel("Exact Java class names, one per line (1–8):"),BorderLayout.NORTH)
+                add(JPanel(GridLayout(6,1)).apply { add(JLabel("Exact Java class names, one per line (1–8):"));add(jdbc);add(hibernate);add(captureData);add(async);add(JPanel(FlowLayout(FlowLayout.LEFT)).apply { add(JLabel("Suspected N+1 repetition threshold:"));add(threshold) }) },BorderLayout.NORTH)
                 add(JScrollPane(input),BorderLayout.CENTER)
                 add(JTextArea("Captures the next 200 method calls, up to 32 MiB of value previews.\nUse the running application after starting. Save the current recording to keep it.\nValues may contain application data. Recording adds work to the calling thread.").apply { isEditable=false;isOpaque=false },BorderLayout.SOUTH)
             }
             override fun getPreferredFocusedComponent()=input
         }
-        if (dialog.showAndGet()) controller.start(input.text.lines().map(String::trim).filter(String::isNotEmpty).distinct())
+        if (dialog.showAndGet()) controller.start(input.text.lines().map(String::trim).filter(String::isNotEmpty).distinct(),jdbc.isSelected,(threshold.value as Number).toInt(),jdbc.isSelected&&hibernate.isSelected,captureData.isSelected,async.isSelected)
+    }
+    private fun createCase(){
+        val call=controller.selectedCall()?:return
+        if(controller.offline){controller.error("Full replay DATA belongs to the connected recording. Saved recordings contain display previews.");return}
+        val service=hu.baader.repl.nrepl.NreplService.getInstance(project)
+        val fields=mapOf("recording" to call.recording(),"call-id" to call.id().toString())
+        service.request("trace/case-info",fields,{ info ->
+            if(info["ready"]!="true"){controller.error(info["detail"].orEmpty());return@request}
+            val name=JTextField("${call.method()}-${call.id()}",28)
+            val bean=JComboBox(info["beans"].orEmpty().lines().filter(String::isNotBlank).toTypedArray()).apply{isEditable=true}
+            val panel=JPanel(BorderLayout()).apply{
+                add(JPanel(GridLayout(2,2)).apply{add(JLabel("New CASE name:"));add(name);add(JLabel("Spring bean (empty for static):"));add(bean)},BorderLayout.CENTER)
+                add(JTextArea("Creates input/expected DATA and a CASE without rerunning the method.\nReview generated Jackson code and expectations in Cases / Reload.\nEntry arguments are frozen before the call; profiles/security context are not restored.").apply{isEditable=false;isOpaque=false},BorderLayout.SOUTH)
+            }
+            if(JOptionPane.showConfirmDialog(this,panel,"Create CASE from call #${call.id()}",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)
+                service.request("trace/case-create",fields+mapOf("name" to name.text.trim(),"bean" to bean.selectedItem?.toString().orEmpty()),{
+                    controller.error("Created ${it["name"]}. Open Cases / Reload to review and run it.")
+                },controller::error)
+        },controller::error)
     }
     private fun refresh() {
         val recording=controller.recording
         if(recording?.id!=shownRecording) {
             val wasFollowing=controller.followLatest
-            shownRecording=recording?.id;shown=null;lastSelection=null;reference=null;cache.clear()
+            shownRecording=recording?.id;shown=null;lastSelection=null;reference=null;sqlSelected=null;cache.clear()
             values.removeAll();sourceNote.text="";graph.resetView();clearFilters();controller.followLatest=wasFollowing
         }
         val root=(roots.selectedItem as? Choice)?.id;val thread=(threads.selectedItem as? Choice)?.id
@@ -256,7 +309,8 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         start.isEnabled=!controller.active && !controller.starting;stop.isEnabled=controller.active
         save.isEnabled=recording!=null && (controller.offline || controller.complete());load.isEnabled=!controller.active && !controller.starting
         live.isEnabled=controller.selectedCall()?.let(controller::live)==true
-        status.text=controller.message+"\nSelected classes only · same-thread parentage · recorded previews, not a complete execution profile."
+        experiment.isEnabled=!controller.offline && controller.selectedCall()?.let { it.status() in setOf("SUCCESS","ERROR") && it.className() !in setOf("async.Task","http.Request") }==true
+        status.text=controller.message+(recording?.async?.takeIf { it.enabled }?.let { " · Async: ${it.pending} queued, ${it.dropped} unlinked" } ?: "")+" · "+(recording?.let { RecordingSql.summary(it.sql) } ?: "")+"\nSelected classes only · explicit Java / async handoffs · recorded previews, not a complete execution profile."
         redraw()
         val call=controller.selectedCall()
         if(shown!=call) {
@@ -281,12 +335,29 @@ class RecordingPanel(private val project: Project, private val inspect: (Map<Str
         breadcrumb.revalidate();breadcrumb.repaint()
     }
     private fun redraw() {
-        val calls=controller.recording?.calls.orEmpty()
-        presentations=cache.update(calls)
+        val record=controller.recording
+        val javaCalls=record?.calls.orEmpty()
+        val ormCalls=record?.let(RecordingHibernate::nodes).orEmpty()
+        val calls=javaCalls + ormCalls + (record?.let { RecordingSql.nodes(it,groupSql.isSelected) } ?: emptyList())
+        val findings=record?.sql?.findings().orEmpty()
+        val affected=findings.flatMap { it.events().map { e -> e.parent() } }.distinct().flatMap { CallNavigation.path(javaCalls,it).map { c -> c.id() } }.toSet()
+        val index=javaCalls.associateBy { it.id() };val counts=mutableMapOf<Long,Int>()
+        record?.sql?.events()?.filter { it.kind()=="SQL" }?.forEach { event ->
+            var call=index[event.parent()]
+            while(call!=null) { counts[call.id()]=(counts[call.id()] ?: 0)+1;call=index[call.parent()] }
+        }
+        val ormFindings=record?.hibernate?.findings(record.sql,record.sql.threshold()).orEmpty()
+        val ormWarnings=ormFindings.flatMap{f->f.events().map{(RecordingHibernate.BASE+it) to f.kind()}}.groupBy({it.first},{it.second})
+        presentations=cache.update(calls).mapValues { (id,p) ->
+            if(id in counts) CallPresentation(p.call,"${counts[id]} SQL"+if(id in affected) " · ⚠ suspected N+1" else "") else if(id in ormWarnings) CallPresentation(p.call,"⚠ "+ormWarnings.getValue(id).distinct().joinToString(" · ")) else p
+        }
         val root=(roots.selectedItem as? Choice)?.id;val filter=currentFilter()
         matches=CallGraphLayout.nodes(calls,root,filter=filter,presentations=presentations).filter { !it.contextOnly }.map { it.call }
-        graph.display(calls,root,controller.selected,filter,presentations)
-        timeline.display(calls,controller.selected,range,matches.map { it.id() }.toSet(),presentations)
+        graph.display(calls,root,sqlSelected ?: controller.selected,filter,presentations)
+        sqlPanel.display(record,root)
+        hibernatePanel.display(record,root)
+        val timeCalls=javaCalls + ormCalls + (record?.let { RecordingSql.nodes(it,false) } ?: emptyList())
+        timeline.display(timeCalls,sqlSelected ?: controller.selected,range,CallGraphLayout.nodes(timeCalls,root,filter=filter).filter { !it.contextOnly }.map { it.call.id() }.toSet(),timeCalls.associate { it.id() to CallPresentation(it) })
         val rangeText=range?.let { " · ${"%.1f".format(Locale.ROOT,it.startMs)}–${"%.1f".format(Locale.ROOT,it.endMs)} ms" }.orEmpty()
         filterNote.text="${matches.size}/${calls.size} matching calls"+rangeText+
             (focus?.let { " · branch #$it" }.orEmpty())+

@@ -128,6 +128,56 @@ final class CaseJUnitExport {
                 quote(definition.get("expected-exception")),quote(definition.get("expected-message")),number(definition),number(definition),
                 definition.get("type"),definition.get("variable"),definition.get("setup")+"\n setupCompleted = true; codeStarted = System.nanoTime();\n"+definition.get("code"),definition.get("result-expression"),
                 definition.get("type"),definition.get("variable"),definition.get("teardown"));
+        if(!definition.get("max-sql-count").isBlank() || !definition.get("max-sql-repetitions").isBlank()) {
+            String counter=className+"SqlCounter", normalizer=className+"SqlText";
+            for(String helper:List.of("CaseSqlCounter","SqlText")) {
+                try(InputStream stream=CaseJUnitExport.class.getResourceAsStream("/case-export/"+helper+".java")) {
+                    if(stream==null) throw new IllegalStateException("Missing portable SQL assertion source");
+                    String text=new String(stream.readAllBytes(),StandardCharsets.UTF_8)
+                        .replace("package com.baader.devrt;","package "+packageName+";")
+                        .replace("package hu.baader.repl.protocol;","package "+packageName+";")
+                        .replace("hu.baader.repl.protocol.SqlText",normalizer).replace("CaseSqlCounter",counter);
+                    if(helper.equals("SqlText")) text=text.replace("SqlText",normalizer);
+                    files.put(javaPrefix+(helper.equals("SqlText")?normalizer:counter)+".java",text);
+                } catch(IOException failure) { throw new UncheckedIOException(failure); }
+            }
+            String config="""
+                    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
+                    static class SqlCaptureConfiguration {
+                        @org.springframework.context.annotation.Bean
+                        static org.springframework.beans.factory.config.BeanPostProcessor captureDataSources() {
+                            return new org.springframework.beans.factory.config.BeanPostProcessor() {
+                                @Override public Object postProcessAfterInitialization(Object bean, String name) {
+                                    return bean instanceof javax.sql.DataSource ds ? %s.wrap(ds) : bean;
+                                }
+                            };
+                        }
+                    }
+                    private %s.Measurement sqlMeasurement;
+                    """.formatted(counter,counter);
+            source=source.replace("@org.springframework.boot.test.context.SpringBootTest", "@org.springframework.context.annotation.Import("+className+".SqlCaptureConfiguration.class)\n@org.springframework.boot.test.context.SpringBootTest")
+                .replace("class "+className+" {","class "+className+" {\n"+config)
+                .replace("setupCompleted = true; codeStarted = System.nanoTime();","setupCompleted = true; codeStarted = System.nanoTime(); sqlMeasurement = new "+counter+".Measurement();")
+                .replace("try { actual = exercise(input); } catch(Throwable failure) { thrown = failure; }", "try { actual = exercise(input); } catch(Throwable failure) { thrown = failure; } finally { if(sqlMeasurement!=null) sqlMeasurement.close(); }")
+                .replace("long duration = (System.nanoTime()-codeStarted)/1_000_000;", "long duration = (System.nanoTime()-codeStarted)/1_000_000;\n"+
+                    "if(ctx.getBeansOfType(javax.sql.DataSource.class).isEmpty()) throw new AssertionError(\"SQL assertions require Spring-managed DataSource beans\");\n"+
+                    "sqlMeasurement.assertLimits("+(definition.get("max-sql-count").isBlank()?"-1":definition.get("max-sql-count"))+"L, "+
+                    (definition.get("max-sql-repetitions").isBlank()?"-1":definition.get("max-sql-repetitions"))+"L);");
+        }
+        if(SnapshotCases.hibernateAssertions(definition)) {
+            String helper=className+"HibernateProbe";
+            try(InputStream stream=CaseJUnitExport.class.getResourceAsStream("/case-export/CaseHibernateProbe.java")) {
+                if(stream==null)throw new IllegalStateException("Missing Hibernate JUnit probe source");
+                files.put(javaPrefix+helper+".java",new String(stream.readAllBytes(),StandardCharsets.UTF_8).replace("package com.baader.devrt;","package "+packageName+";").replace("CaseHibernateProbe",helper));
+            }catch(IOException e){throw new UncheckedIOException(e);}
+            source=source.replace("class "+className+" {","class "+className+" {\nprivate "+helper+" hibernateMeasurement;")
+                    .replace("setupCompleted = true; codeStarted = System.nanoTime();","setupCompleted = true; codeStarted = System.nanoTime(); hibernateMeasurement = new "+helper+"();")
+                    .replace("if (!setupCompleted)","if(hibernateMeasurement!=null) hibernateMeasurement.close();\nif (!setupCompleted)")
+                    .replace("long duration = (System.nanoTime()-codeStarted)/1_000_000;","long duration = (System.nanoTime()-codeStarted)/1_000_000;\n"+
+                            "if(hibernateMeasurement==null) throw new AssertionError(\"Hibernate capture did not start\",thrown);\n"+
+                            "hibernateMeasurement.assertLimits("+String.join(",",SnapshotCases.HIBERNATE_FIELDS.stream().map(k->(definition.get(k).isBlank()?"-1":definition.get(k))+"L").toList())+");");
+            files.put("runtime/sb-repl-agent.jar","Binary: matching agent included by ZIP export; not an executable source preview.");
+        }
         validateSyntax(className,source);
         files.put(javaPrefix+className+".java",source);
         files.put("README-sbrepl-"+className+".md","""
@@ -146,10 +196,31 @@ final class CaseJUnitExport {
                 The portable assertion helper is the same source as the runtime assertion engine.
                 This is a source export: Java syntax is checked, but types/dependencies must be compiled in your application.
                 Setup precedes code inside exercise(); cleanup can refer to the input and ctx, not exercise-local variables.
-                The generated duration assertion includes code and result expression, excluding cleanup/JSON comparison.
+                The generated duration and SQL assertions include code and result expression, excluding setup/cleanup/JSON comparison.
+                SQL assertions use the included DataSource proxy helper, without a REPL agent. All JDBC access must use Spring-managed DataSource beans.
+                Direct DriverManager connections, unwrapped native JDBC objects, asynchronous work and concrete datasource injection need adaptation.
+                A JDBC batch counts as one execution; these counters do not measure database-internal plans or result row counts.
                 App-specific Jackson serializers, mix-ins, autowired aliases and JShell-only declarations need manual adaptation.
                 SAME_THREAD timeout is cooperative; arbitrary I/O, threads and independent transactions cannot be undone.
                 """.formatted(name,className,packageName,className,policy.mode.name(),policy.manager,ExecutionPolicy.LIMITS));
+        if(SnapshotCases.hibernateAssertions(definition)) {
+            String readme="README-sbrepl-"+className+".md";
+            files.put(readme,files.get(readme).replace("no IDE or REPL agent is required","no IDE is required; Hibernate assertions REQUIRE the matching agent")+"""
+
+                    ## Hibernate assertions
+
+                    This case includes ORM limits that must not be silently dropped. Hibernate 6.6 is required.
+                    ZIP export includes runtime/sb-repl-agent.jar. Start the test JVM with:
+                    -javaagent:/absolute/path/to/runtime/sb-repl-agent.jar=port=0
+                    For Maven Surefire, add this option to argLine, preserving existing options (e.g. JaCoCo).
+                    For Gradle, add it to the Test task's jvmArgs. Do not add it only to the build daemon.
+                    The agent opens an authenticated local REPL endpoint; use only in the intended development/test environment.
+                    The ORM measurement covers Code and Result expression, excluding setup, cleanup and JSON comparison.
+                    Lazy counts include entity proxies, persistent collections and enhanced attributes. ORM durations overlap SQL.
+                    Missing instrumentation, unsupported Hibernate or incomplete evidence fails the assertion.
+                    These ORM assertions cannot run agent-free; ordinary SQL-only exports remain agent-free.
+                    """);
+        }
         checkSize(files);
         return files;
     }
@@ -166,11 +237,23 @@ final class CaseJUnitExport {
     }
     static void export(String name,String packageName,String className,Map<String,String> settings,Path destination) throws IOException {
         Map<String,String> files=files(name,packageName,className,settings);
+        byte[] agent=files.containsKey("runtime/sb-repl-agent.jar")?exportAgent():null;
         SnapshotIO.atomicWrite(destination.toAbsolutePath().normalize(),false,output->{
             ZipOutputStream zip=new ZipOutputStream(output,StandardCharsets.UTF_8);
-            for(var entry:files.entrySet()) {zip.putNextEntry(new ZipEntry(entry.getKey()));zip.write(entry.getValue().getBytes(StandardCharsets.UTF_8));zip.closeEntry();}
+            for(var entry:files.entrySet()) {zip.putNextEntry(new ZipEntry(entry.getKey()));zip.write(entry.getKey().equals("runtime/sb-repl-agent.jar")?agent:entry.getValue().getBytes(StandardCharsets.UTF_8));zip.closeEntry();}
             zip.finish();
         });
+    }
+    private static byte[] exportAgent() throws IOException {
+        try {
+            Path path=Path.of(Agent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if(!Files.isRegularFile(path))path=Path.of(System.getProperty("sb.repl.agentJar",""));
+            if(!Files.isRegularFile(path)||Files.size(path)>16*1024*1024)throw new IOException("Matching packaged agent is unavailable for Hibernate JUnit export");
+            try(var jar=new java.util.jar.JarFile(path.toFile())) {
+                if(!"com.baader.devrt.Agent".equals(jar.getManifest().getMainAttributes().getValue("Premain-Class")))throw new IOException("Invalid REPL agent package");
+            }
+            return Files.readAllBytes(path);
+        }catch(java.net.URISyntaxException e){throw new IOException(e);}
     }
     private static String boxed(String type){return switch(type){case "int"->"java.lang.Integer";case "long"->"java.lang.Long";case "double"->"java.lang.Double";case "float"->"java.lang.Float";case "boolean"->"java.lang.Boolean";case "byte"->"java.lang.Byte";case "short"->"java.lang.Short";case "char"->"java.lang.Character";default->type;};}
     private static long number(Map<String,String> definition){String value=definition.get("max-duration-ms");return value.isBlank()?0:Long.parseLong(value);}

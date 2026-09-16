@@ -174,7 +174,7 @@ class NreplService(private val project: Project) : Disposable {
             ui { onError?.invoke("REPL is disconnected. Start or connect an application first.") }
             return
         }
-        val executes = op in setOf("eval", "java-eval", "case/run", "case/run-batch")
+        val executes = op in setOf("eval", "java-eval", "case/run", "case/run-batch", "watch/refresh")
         if (executes && !executionSelection.ready) {
             snippets.remove(id)
             ui { onError?.invoke("Execution settings are not confirmed. Wait for the mode change or use Session > Refresh execution settings.") }

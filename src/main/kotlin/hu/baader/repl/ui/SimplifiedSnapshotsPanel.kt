@@ -32,6 +32,7 @@ class SimplifiedSnapshotsPanel(
         button("Pin LIVE") { save("snapshot/pin") }
         button("Freeze DATA") { save("snapshot/save") }
         button("Load", ::load)
+        button("Edit DATA copy") { list.selectedValue?.takeIf { it.kind=="DATA" }?.let { row -> connection()?.let { DataCopyEditor.open(it,row.name,::refresh,::error) } } }
         button("Info") { list.selectedValue?.let { row -> connection()?.snapshotInfo(row.name, { Messages.showInfoMessage(it, row.name) }, ::error) } }
         button("Versions") {
             list.selectedValue?.let { row ->

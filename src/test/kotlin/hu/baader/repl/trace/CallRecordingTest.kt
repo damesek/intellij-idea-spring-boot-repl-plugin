@@ -26,12 +26,20 @@ class CallRecordingTest {
         for (calls in listOf(listOf(call(1),call(1)),listOf(call(3,2,1)),listOf(call(1),call(2,1,1,thread=2)),listOf(call(1),call(2,1,2))))
             assertThrows(IllegalArgumentException::class.java) { CallRecording(id,calls).validate() }
     }
+    @Test fun explicitAsyncBoundaryPreservesCrossThreadTreeAndPortableValues() {
+        val boundary=RecordedCall(id,2,1,1,"async.Task","execute","(Ljava/util/Map;)V","handoff",2,"worker",1700000000001,2000,"SUCCESS","void",
+            ValueTree.leaf("queueWaitMs","NUMBER","double","1.0").encode(),"","",-1,2)
+        val recording=CallRecording(id,listOf(call(1),boundary,call(3,2,1,thread=2)))
+        assertEquals(recording,CallRecording.decode(recording.encode()))
+        assertEquals(listOf(0,1,2),CallGraphLayout.nodes(recording.calls).map { it.depth })
+        assertTrue(CallPresentation(boundary).badge.startsWith("ASYNC"))
+    }
     @Test fun malformedValuesSourcesAndDescriptorsCannotEnterAnArchive() {
         assertThrows(IllegalArgumentException::class.java) { CallRecording.decode("{}") }
         val source=CapturedSource("example.Service","../../escape.java","class Service {}","bad",emptyMap())
         assertThrows(IllegalArgumentException::class.java) { CallRecording(id,listOf(call(1)),listOf(source)).validate() }
         val good=CallRecording(id,listOf(call(1))).encode()
-        assertThrows(IllegalArgumentException::class.java) { CallRecording.decode(good.replace("\"version\":1","\"version\":99")) }
+        assertThrows(IllegalArgumentException::class.java) { CallRecording.decode(good.replace("\"version\":4","\"version\":99")) }
         assertThrows(IllegalArgumentException::class.java) { ValueTree.decode("not a captured value") }
     }
     @Test fun jvmDescriptorsDistinguishOverloadsArraysAndNestedTypes() {

@@ -2,6 +2,8 @@ package hu.baader.repl.trace
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import hu.baader.repl.protocol.SqlSnapshot
+import hu.baader.repl.protocol.HibernateSnapshot
 import hu.baader.repl.protocol.RecordedCall
 import hu.baader.repl.protocol.ValueTree
 import java.security.MessageDigest
@@ -20,19 +22,39 @@ data class CapturedSource(val className: String, val fileName: String, val text:
     }
 }
 
-data class CallRecording(val id: String, val calls: List<RecordedCall>, val sources: List<CapturedSource> = emptyList(), val epoch: Long = 0) {
+data class AsyncEvidence(val enabled:Boolean=false,val available:Boolean=false,val pending:Long=0,val dropped:Long=0)
+
+data class CallRecording(val id: String, val calls: List<RecordedCall>, val sources: List<CapturedSource> = emptyList(), val epoch: Long = 0, val sql: SqlSnapshot = SqlSnapshot.disabled(), val hibernate: HibernateSnapshot = HibernateSnapshot.disabled(), val async:AsyncEvidence=AsyncEvidence()) {
     fun validate(values: Boolean = true, sourceChecks: Boolean = true) {
+        require(async.pending>=0 && async.dropped>=0)
         require(id.matches(Regex("[a-f0-9-]{36}")) && epoch >= 0 && calls.size <= RecordedCall.MAX_CALLS)
         val index = calls.associateBy { it.id() }
         require(index.size == calls.size) { "Duplicate call identities" }
         calls.forEach { call ->
-            require(call.recording() == id)
+            require(call.recording() == id && call.id() <= RecordedCall.MAX_CALLS)
             if (call.parent() == 0L) require(call.root() == call.id()) else {
                 val parent = requireNotNull(index[call.parent()]) { "Missing recorded parent" }
-                require(call.root() == parent.root() && call.threadId() == parent.threadId()) { "Invalid call tree" }
+                require(call.root() == parent.root() && (call.threadId() == parent.threadId() || call.className() == "async.Task")) { "Invalid call tree" }
             }
             MethodDescriptor.parameters(call.descriptor())
             if (values) listOf(call.input(), call.output(), call.exception()).filter(String::isNotEmpty).forEach { ValueTree.decode(it) }
+        }
+        sql.events().forEach { event ->
+            require(event.id() <= Long.MAX_VALUE - RecordingSql.BASE) { "SQL view identity exceeds limit" }
+            val parent = requireNotNull(index[event.parent()]) { "SQL parent missing" }
+            require(event.root() == parent.root() && event.thread() == parent.threadId()) { "Invalid SQL ancestry" }
+        }
+        val ormIndex=hibernate.events().associateBy { it.id() }
+        hibernate.events().forEach { event ->
+            require(event.id()<RecordingSql.BASE-RecordingHibernate.BASE) { "Hibernate view identity exceeds limit" }
+            val parent=requireNotNull(index[event.parent()]) { "Hibernate Java parent missing" }
+            require(event.root()==parent.root() && event.thread()==parent.threadId()) { "Invalid Hibernate ancestry" }
+            require(event.parentOrm()==0L || event.parentOrm() in ormIndex || hibernate.partial()) { "Hibernate parent missing" }
+        }
+        sql.events().filter { it.orm()!=0L }.forEach { event ->
+            val orm=ormIndex[event.orm()]
+            require(orm!=null || hibernate.partial()) { "SQL Hibernate parent missing" }
+            if(orm!=null)require(event.root()==orm.root() && event.thread()==orm.thread()) { "SQL and Hibernate context mismatch" }
         }
         require(sources.size <= 8 && sources.map { it.className }.toSet().size == sources.size && sources.sumOf { it.text.length.toLong() } <= 4_000_000)
         if (sourceChecks) sources.forEach(CapturedSource::validate)
@@ -43,8 +65,8 @@ data class CallRecording(val id: String, val calls: List<RecordedCall>, val sour
     fun encode(): String {
         validate()
         val records = interrupted("Call had not finished when saved").calls
-        return Gson().toJson(mapOf("format" to "sbrepl-recording", "version" to 1, "id" to id, "epoch" to epoch,
-            "calls" to records.map { it.encode() }, "sources" to sources)).also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Recording exceeds 64 MiB" } }
+        return Gson().toJson(mapOf("format" to "sbrepl-recording", "version" to 4, "id" to id, "epoch" to epoch,
+            "calls" to records.map { it.encode() }, "sources" to sources, "sql" to sql.encode(), "hibernate" to hibernate.encode(), "async" to async)).also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Recording exceeds 64 MiB" } }
     }
     companion object {
         const val MAX_BYTES = 64 * 1024 * 1024
@@ -52,10 +74,11 @@ data class CallRecording(val id: String, val calls: List<RecordedCall>, val sour
             require(json.toByteArray(Charsets.UTF_8).size <= MAX_BYTES)
             try {
                 val obj = JsonParser.parseString(json).asJsonObject
-                require(obj["format"].asString == "sbrepl-recording" && obj["version"].asInt == 1)
+                require(obj["format"].asString == "sbrepl-recording" && obj["version"].asInt in 1..4)
                 require(obj["calls"].asJsonArray.size() <= RecordedCall.MAX_CALLS && obj["sources"].asJsonArray.size() <= 8)
                 return CallRecording(obj["id"].asString, obj["calls"].asJsonArray.map { RecordedCall.decode(it.asString) },
-                    obj["sources"].asJsonArray.map { Gson().fromJson(it, CapturedSource::class.java) }, obj["epoch"].asLong).also { it.validate() }
+                    obj["sources"].asJsonArray.map { Gson().fromJson(it, CapturedSource::class.java) }, obj["epoch"].asLong, obj["sql"]?.let { SqlSnapshot.decode(it.asString) } ?: SqlSnapshot.disabled(),
+                    obj["hibernate"]?.let { HibernateSnapshot.decode(it.asString) } ?: HibernateSnapshot.disabled(), obj["async"]?.let { Gson().fromJson(it,AsyncEvidence::class.java) } ?: AsyncEvidence()).also { it.validate() }
             } catch (e: Exception) { throw IllegalArgumentException("Invalid recording: ${e.message}", e) }
         }
     }

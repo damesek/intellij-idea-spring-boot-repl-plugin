@@ -106,8 +106,14 @@ final class SnapshotVersions {
         });
     }
     static void importBatch(Map<Path,Path> prepared) throws IOException {
+        importBatch(prepared, Map.of());
+    }
+    static void importBatch(Map<Path,Path> prepared, Map<Path,String> expectedVersions) throws IOException {
         if (prepared.isEmpty()) return;
         locked(prepared.keySet().iterator().next(), () -> {
+            for (var expected : expectedVersions.entrySet())
+                if (!Files.exists(expected.getKey()) || !expected.getValue().equals(checksum(expected.getKey())))
+                    throw new IOException("Source DATA changed; reopen the editor before saving");
             for (Path target : prepared.keySet()) if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Workspace import name already exists; choose a different prefix");
             try (var entries = Files.list(prepared.keySet().iterator().next().getParent())) {
                 if (entries.filter(p -> p.getFileName().toString().matches("[a-f0-9]{64}\\.json")).count() + prepared.size() > 1000) throw new IOException("Workspace import exceeds snapshot limit (1000)");

@@ -11,21 +11,42 @@ final class ExecutionHistory {
     private static final Map<String, ExecutionHistory> HISTORIES = new ConcurrentHashMap<>();
     final String owner, id = UUID.randomUUID().toString();
     final long epoch = SpringContextHolder.epoch();
+    final SqlRecorder.Log sql;
+    final CallExperiments experiments;
+    final boolean async;
+    final java.util.concurrent.atomic.AtomicLong asyncPending = new java.util.concurrent.atomic.AtomicLong();
+    final java.util.concurrent.atomic.AtomicLong asyncDropped = new java.util.concurrent.atomic.AtomicLong();
     private final LinkedHashMap<Long, RecordedCall> calls = new LinkedHashMap<>();
     private boolean active = true;
     private long revision, nextId, dropped;
     private int bytes;
     record Ticket(ExecutionHistory history, long id) {}
-    private ExecutionHistory(String owner) { this.owner = owner; }
+    private ExecutionHistory(String owner,boolean sql,int threshold,boolean hibernate,boolean captureData,boolean async) { this.owner = owner; this.sql=new SqlRecorder.Log(sql,threshold,hibernate);this.experiments=new CallExperiments(this,captureData);this.async=async; }
     static ExecutionHistory begin(String owner) {
-        ExecutionHistory history = new ExecutionHistory(owner);
+        return begin(owner,false,5);
+    }
+    static ExecutionHistory begin(String owner,boolean sql,int threshold) {
+        return begin(owner,sql,threshold,false);
+    }
+    static ExecutionHistory begin(String owner,boolean sql,int threshold,boolean hibernate) {
+        return begin(owner,sql,threshold,hibernate,false);
+    }
+    static ExecutionHistory begin(String owner,boolean sql,int threshold,boolean hibernate,boolean captureData) {
+        return begin(owner,sql,threshold,hibernate,captureData,false);
+    }
+    static ExecutionHistory begin(String owner,boolean sql,int threshold,boolean hibernate,boolean captureData,boolean async) {
+        ExecutionHistory history = new ExecutionHistory(owner,sql,threshold,hibernate,captureData,async);
         ExecutionHistory old = HISTORIES.put(owner, history); if (old != null) old.stop();
         return history;
     }
     static ExecutionHistory get(String owner) { return HISTORIES.get(owner); }
     static void release(String owner) { ExecutionHistory old = HISTORIES.remove(owner); if (old != null) old.stop(); }
     synchronized void stop() { active = false; }
+    void asyncIncomplete() { asyncDropped.incrementAndGet(); }
     synchronized boolean recording() { return active && epoch == SpringContextHolder.epoch(); }
+    synchronized long root(long id) { RecordedCall call=calls.get(id); return call==null ? 0 : call.root(); }
+    synchronized boolean incomplete(){return dropped>0||asyncPending.get()>0||asyncDropped.get()>0;}
+    synchronized List<RecordedCall> calls(){return List.copyOf(calls.values());}
     Ticket enter(long parent, String type, String method, String descriptor, String names, Object[] args) {
         long callId;
         synchronized (this) {
@@ -65,11 +86,20 @@ final class ExecutionHistory {
             calls.put(old.id(),new RecordedCall(id,old.id(),old.parent(),old.root(),old.className(),old.method(),old.descriptor(),old.parameterNames(),
                     old.threadId(),old.threadName(),old.startedAt(),Math.max(0,elapsed),failure == null ? "SUCCESS" : "ERROR",
                     summary,old.input(),retain(output),retain(exception),event,++revision));
+            ReplNotifications.publish(owner,"recording.call.completed",Map.of("recording",id,"call",ticket.id(),"status",failure==null?"SUCCESS":"ERROR"));
         }
     }
     synchronized Map<String,Object> list() {
-        return Map.of("recording",id,"value",String.join("\n",calls.values().stream().map(c -> c.header().encode()).toList()),
-                "active",recording(),"revision",revision,"dropped",dropped,"bytes",bytes,"context-epoch",epoch);
+        var evidence=sql.snapshot();
+        // A running Java/HTTP flow can still issue SQL even between JDBC calls.
+        evidence=new hu.baader.repl.protocol.SqlSnapshot(evidence.enabled(),evidence.available(),evidence.revision(),evidence.total(),evidence.dropped()+dropped+asyncDropped.get(),
+            evidence.pending()+asyncPending.get()+calls.values().stream().filter(c -> c.status().equals("RUNNING")).count(),evidence.threshold(),evidence.events());
+        var orm=sql.orm.snapshot();
+        orm=new hu.baader.repl.protocol.HibernateSnapshot(orm.enabled(),orm.available(),orm.version(),orm.revision(),orm.dropped()+dropped+asyncDropped.get(),
+                orm.pending()+asyncPending.get()+calls.values().stream().filter(c->c.status().equals("RUNNING")).count(),orm.events());
+        Map<String,Object> result=new LinkedHashMap<>(Map.of("recording",id,"value",String.join("\n",calls.values().stream().map(c -> c.header().encode()).toList()),
+                "active",recording(),"revision",revision,"dropped",dropped,"bytes",bytes,"context-epoch",epoch,"sql",evidence.encode(),"hibernate",orm.encode()));
+        result.put("async",async);result.put("async-available",AsyncRecorder.available());result.put("async-pending",asyncPending.get());result.put("async-dropped",asyncDropped.get());return result;
     }
     synchronized RecordedCall call(String recording, long id) {
         if (!this.id.equals(recording)) throw new IllegalArgumentException("Recording changed; refresh the call history");
@@ -93,7 +123,7 @@ final class ExecutionHistory {
     }
     private String retain(String value) {
         if (bytes + value.length()*2 > MAX_BYTES) {
-            active = false;
+            active = false;dropped++;
             value = limit("Recording memory limit reached");
             if (bytes + value.length()*2 > MAX_BYTES) value = "";
         }

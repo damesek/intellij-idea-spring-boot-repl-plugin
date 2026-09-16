@@ -182,7 +182,7 @@ public final class SnapshotManager {
         for (int i=0;i<count;i++) arguments.add(sourceType(javaType.getClass().getMethod("containedType", int.class).invoke(javaType,i),depth+1));
         return name+"<"+String.join(",",arguments)+">";
     }
-    private static Object materialize(Map<String, Object> envelope, String type) {
+    static Object materialize(Map<String, Object> envelope, String type) {
         if (!"DATA".equals(envelope.get("kind"))) throw new IllegalArgumentException("Not a DATA snapshot");
         Object mapper = mapper();
         try {
@@ -286,7 +286,7 @@ public final class SnapshotManager {
     /** Compatibility API: evaluate explicitly in the REPL, then save the resulting variable/handle. */
     public static void saveExpression(String name, String expression) { throw new UnsupportedOperationException("Evaluate the expression first, then save its result"); }
 
-    private static Map<String, Object> envelope(String name, String kind) {
+    static Map<String, Object> envelope(String name, String kind) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("schemaVersion", 1); envelope.put("name", checkedName(name)); envelope.put("kind", kind);
         envelope.put("applicationId", applicationId()); envelope.put("contextEpoch", SpringContextHolder.epoch());
@@ -328,6 +328,44 @@ public final class SnapshotManager {
         } catch (IOException e) { throw failure("Cannot restore snapshot version", e); }
     }
     static Map<String,Object> bundleEnvelope(String name) { return read(name); }
+    static Map<String,Object> detachedEnvelope(String name) { return read(name, true); }
+    /** Publish detached JSON entries together, under the repository lock, without overwriting any name. */
+    static void createNew(Map<String,Map<String,Object>> entries, Map<String,String> expectedVersions) {
+        Map<Path,Path> prepared=new LinkedHashMap<>();
+        try {
+            Object codec=CaseJson.mapper();
+            for(var entry:entries.entrySet()){
+                String name=checkedName(entry.getKey());
+                Map<String,Object> data=new LinkedHashMap<>(entry.getValue());
+                data.put("schemaVersion",1);data.put("applicationId",applicationId());data.put("name",name);
+                data.put("recordedAt",Instant.now().toString());data.put("recordedBy",SCOPE.get());
+                validate(data);
+                Path target=path(name), temporary=Files.createTempFile(target.getParent(),".prepared-",".tmp");
+                prepared.put(target,temporary);
+                SnapshotIO.atomicWrite(temporary,false,out->encode(codec,data,out));
+            }
+            Map<Path,String> versions=new LinkedHashMap<>();
+            expectedVersions.forEach((name,version)->versions.put(path(name),version));
+            SnapshotVersions.importBatch(prepared,versions);
+        } catch(IOException failure){throw failure("New DATA/CASE was not saved; existing data preserved",failure);}
+        finally { for(Path temporary:prepared.values())try{Files.deleteIfExists(temporary);}catch(IOException ignored){} }
+    }
+    /** Detached JSON captured with the snapshot codec. Bounded before allocating the final byte array. */
+    static Map<String,Object> freezeData(Object value, String type, int limit) {
+        rejectInfrastructure(value);
+        Map<String,Object> data=envelope("recorded-value","DATA");
+        data.put("declaredType",type==null||type.isBlank()?typeOf(value):checkedType(type)); data.put("payload",value);
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+        OutputStream bounded=new FilterOutputStream(bytes) {
+            int count;
+            private void reserve(int length) throws IOException { if(length>limit-count)throw new IOException("Full DATA capture exceeds "+limit+" bytes");count+=length; }
+            @Override public void write(int value) throws IOException {reserve(1);out.write(value);}
+            @Override public void write(byte[] value,int offset,int length) throws IOException {reserve(length);out.write(value,offset,length);}
+        };
+        encode(mapper(),data,bounded);
+        @SuppressWarnings("unchecked") Map<String,Object> frozen=(Map<String,Object>)CaseJson.parse(bytes.toString(StandardCharsets.UTF_8),limit);
+        return frozen;
+    }
     static void copyData(String from, String to) {
         Map<String,Object> data = read(from);
         if (!"DATA".equals(data.get("kind"))) throw new IllegalArgumentException("Reproduction input must be a DATA snapshot");

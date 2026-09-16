@@ -51,20 +51,22 @@ class RecordingController(private val project: Project) : Disposable {
     fun listen(listener: () -> Unit): Disposable { listeners += listener; return Disposable { listeners -= listener } }
     private fun changed() { if (!disposed) listeners.toList().forEach { it() } }
     fun error(text: String) { message=text; changed() }
-    fun complete() = recording?.calls?.all { loaded[it.id()] == it.revision() } == true
+    fun complete() = recording?.let { r -> r.sql.pending() == 0L && r.hibernate.pending()==0L && r.async.pending==0L && r.calls.all { loaded[it.id()] == it.revision() } } == true
     fun downloaded(call: RecordedCall) = call.recording() == recording?.id && loaded[call.id()] == call.revision()
     fun live(call: RecordedCall) = !offline && target != null && target == service.debuggerTarget() && service.isConnected() && call.recording() == recording?.id && call.event() >= 0
-    fun start(classes: List<String>): CompletableFuture<String> {
+    fun start(classes: List<String>, sql: Boolean = true, threshold: Int = 5, hibernate: Boolean = sql, captureData: Boolean = false, async: Boolean = false): CompletableFuture<String> {
         val completion = CompletableFuture<String>()
         fun fail(reason: String) { error(reason); completion.completeExceptionally(IllegalStateException(reason)) }
         if (starting || active) { fail("Stop the current recording first."); return completion }
         if (!service.isConnected()) { fail("Connect to the application before recording."); return completion }
         try {
             require(classes.size in 1..8 && classes.all { it.length <= 512 && it.matches(Regex("[\\w$]+(?:\\.[\\w$]+)+")) }) { "Enter 1–8 exact application class names, one per line." }
+            require(threshold in 2..1000) { "N+1 threshold must be 2–1000" }
+            require(!hibernate || sql) { "Hibernate capture requires SQL capture" }
             val sources = RecordingSource.capture(project,classes)
             val expectedTarget = service.debuggerTarget(); val ticket=++generation
             starting=true; polling=false; fetching=false; message="Preparing class recording…"; changed()
-            service.request("trace/record",mapOf("classes" to classes.joinToString("\n")), { response ->
+            service.request("trace/record",mapOf("classes" to classes.joinToString("\n"), "sql" to sql.toString(), "n-plus-one-threshold" to threshold.toString(), "hibernate" to hibernate.toString(), "capture-data" to captureData.toString(), "async" to async.toString()), { response ->
                 if (!valid(ticket) || expectedTarget != service.debuggerTarget()) {
                     completion.completeExceptionally(IllegalStateException("Recording target changed during start")); return@request
                 }
@@ -109,7 +111,9 @@ class RecordingController(private val project: Project) : Disposable {
             val headers=wire.lineSequence().filter(String::isNotEmpty).map(RecordedCall::decode).toList()
             require(headers.size <= RecordedCall.MAX_CALLS)
             val old=current.calls.associateBy { it.id() }
-            recording=current.copy(calls=headers.map { h -> old[h.id()]?.takeIf { it.revision() >= h.revision() } ?: h }).also { it.validate(false,false) }
+            val sql = response["sql"]?.let(hu.baader.repl.protocol.SqlSnapshot::decode) ?: current.sql
+            val hibernate=response["hibernate"]?.let(hu.baader.repl.protocol.HibernateSnapshot::decode) ?: current.hibernate
+            recording=current.copy(sql=sql, hibernate=hibernate, async=AsyncEvidence(response["async"]=="true",response["async-available"]=="true",response["async-pending"]?.toLongOrNull()?:0,response["async-dropped"]?.toLongOrNull()?:0), calls=headers.map { h -> old[h.id()]?.takeIf { it.revision() >= h.revision() } ?: h }).also { it.validate(false,false) }
             active=response["active"] == "true"
             message="${if (active) "Recording" else "Stopped"} · ${headers.size}/200 calls · ${response["bytes"]?.toLongOrNull()?.div(1024) ?: 0} KiB of previews · omitted: ${response["dropped"] ?: "0"}"
             changed(); fetchNext()

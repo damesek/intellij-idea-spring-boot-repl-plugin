@@ -21,22 +21,29 @@ object CallGraphLayout {
         filter: CallFilter = CallFilter(),
         presentations: Map<Long, CallPresentation> = calls.associate { it.id() to CallPresentation(it) }
     ): List<Node> {
-        require(calls.size <= RecordedCall.MAX_CALLS)
+        require(calls.size <= RecordedCall.MAX_CALLS + hu.baader.repl.protocol.SqlSnapshot.MAX_EVENTS + hu.baader.repl.protocol.HibernateSnapshot.MAX_EVENTS)
         val groups = calls.groupBy { it.parent() }
+        val index = calls.associateBy { it.id() }
+        val pathsById = mutableMapOf<Long, List<RecordedCall>>()
+        fun path(id: Long): List<RecordedCall> = pathsById.getOrPut(id) {
+            val route = mutableListOf<RecordedCall>(); var call = index[id]
+            while(call != null && route.size <= calls.size) { route += call; call=index[call.parent()] }
+            route.reversed()
+        }
         val origin = calls.minOfOrNull { it.startedAt() } ?: 0L
         val base = calls.filter { root == null || it.root() == root }.map { it.id() }.toSet()
         val focus = if (filter.focus == null) base else calls.filter {
-            CallNavigation.path(calls, it.id()).any { ancestor -> ancestor.id() == filter.focus }
+            path(it.id()).any { ancestor -> ancestor.id() == filter.focus }
         }.map { it.id() }.toSet()
         val matches = calls.filter {
             it.id() in base && it.id() in focus && filter.matches(it, presentations.getValue(it.id()), origin)
         }.map { it.id() }.toSet()
-        val paths = matches.flatMap { CallNavigation.path(calls, it) }.map { it.id() }.filter { it in base }.toSet()
-        val requiredParents = if (filter.active) matches.flatMap { CallNavigation.path(calls, it).dropLast(1) }.map { it.id() }.toSet() else emptySet()
+        val paths = matches.flatMap { path(it) }.map { it.id() }.filter { it in base }.toSet()
+        val requiredParents = if (filter.active) matches.flatMap { path(it).dropLast(1) }.map { it.id() }.toSet() else emptySet()
         fun descendants(parent: Long): List<RecordedCall> = groups[parent].orEmpty().flatMap { listOf(it) + descendants(it.id()) }
         val result = mutableListOf<Node>()
         fun visit(parent: Long, depth: Int) {
-            require(depth <= RecordedCall.MAX_CALLS)
+            require(depth <= calls.size)
             groups[parent].orEmpty().sortedBy { it.id() }.forEach { call ->
                 if (call.id() !in paths) return@forEach
                 val children = groups[call.id()].orEmpty().any { it.id() in paths }
@@ -203,6 +210,7 @@ class CallGraph(
             g.color = JBColor.PanelBackground; g.fillRect(0, 0, width, height)
             g.scale(zoom, zoom)
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
             if (nodes.isEmpty()) {
                 g.color = JBColor.GRAY; g.font = UIManager.getFont("Label.font")
                 g.drawString(if (calls.isEmpty()) "Record a class to capture calls." else "No matching calls. Clear filters to show all calls.", 24, 42)
@@ -211,9 +219,13 @@ class CallGraph(
             val index = nodes.associateBy { it.call.id() }
             g.color = JBColor.GRAY
             nodes.forEach { node -> index[node.call.parent()]?.let { p ->
+                val async=node.call.className()=="async.Task"
+                g.color=if(async)JBColor(Color(71,99,172),Color(142,173,234)) else JBColor.GRAY
+                g.stroke=if(async)BasicStroke(1.5f,BasicStroke.CAP_BUTT,BasicStroke.JOIN_ROUND,1f,floatArrayOf(5f,4f),0f) else BasicStroke(1f)
                 val x = p.bounds.x + 12; val y = node.bounds.y + 22
                 g.drawLine(x, p.bounds.y + p.bounds.height, x, y); g.drawLine(x, y, node.bounds.x, y)
             } }
+            g.stroke=BasicStroke(1f)
             val clip = g.clipBounds
             for (node in nodes) {
                 val b = node.bounds
@@ -221,13 +233,13 @@ class CallGraph(
                 val call = node.call; val data = presentations.getValue(call.id())
                 g.color = if (call.id() == selected) JBColor(Color(223,236,255),Color(52,72,99)) else JBColor(Color.WHITE,Color(47,49,53))
                 g.fillRoundRect(b.x,b.y,b.width,b.height,12,12)
-                g.color = statusColor(call)
+                g.color = if (data.badge.contains("N+1")) JBColor(Color(147,100,15),Color(230,181,79)) else statusColor(call)
                 g.stroke = if (node.contextOnly) BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 1f, floatArrayOf(4f,4f), 0f)
                     else BasicStroke(if (call.id() == selected) 2f else 1f)
                 g.drawRoundRect(b.x,b.y,b.width,b.height,12,12); g.stroke = BasicStroke(1f)
                 g.font = (UIManager.getFont("Label.font") ?: font).deriveFont(Font.BOLD,12f)
                 if (node.hasChildren) g.drawString(if (node.collapsed) "+" else "−", b.x+10, b.y+21)
-                drawText(g, "#${call.id()}  ${call.className().substringAfterLast('.')}.${call.method()}", b.x+30,b.y+21,b.width-42)
+                drawText(g, "#${call.id()}  "+if(call.className()=="async.Task")"Async handoff" else "${call.className().substringAfterLast('.')}.${call.method()}", b.x+30,b.y+21,b.width-42)
                 g.font = g.font.deriveFont(Font.PLAIN,11f); g.color = JBColor.foreground()
                 drawText(g, "${statusIcon(call)} ${call.status()} · ${CallPresentation.duration(call)} ms" +
                     (if (node.contextOnly) " · caller path" else ""), b.x+12,b.y+40,b.width-24)

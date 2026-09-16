@@ -19,7 +19,7 @@ internal class McpHttpServer private constructor(
         fun start(port: Int, permissions: McpPermissions, backend: () -> McpBackend, changed: () -> Unit): McpHttpServer {
             require(port in 0..65535) { "Port must be 0..65535 (0 selects a free port)" }
             val server = HttpServer.create(InetSocketAddress("127.0.0.1", port), 16)
-            val executor = ThreadPoolExecutor(8, 8, 30, TimeUnit.SECONDS, ArrayBlockingQueue(32),
+            val executor = ThreadPoolExecutor(16, 16, 30, TimeUnit.SECONDS, ArrayBlockingQueue(32),
                 { r -> Thread(r, "sb-repl-mcp-http").apply { isDaemon = true } }, ThreadPoolExecutor.AbortPolicy())
             val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sb-repl-mcp-expiry").apply { isDaemon = true } }
             val token = McpRouter.secret()
@@ -29,6 +29,7 @@ internal class McpHttpServer private constructor(
                 server.executor = executor
                 server.start()
                 timer.scheduleAtFixedRate({ router.expireIdle() }, 1, 1, TimeUnit.MINUTES)
+                timer.scheduleAtFixedRate({ runCatching { router.pollEvents() } }, 0, 1, TimeUnit.SECONDS)
                 return McpHttpServer(server, executor, timer, router, token)
             } catch (e: Exception) { router.close(); server.stop(0); timer.shutdownNow(); executor.shutdownNow(); throw e }
         }
@@ -52,6 +53,10 @@ internal class McpHttpServer private constructor(
                 exchange.responseHeaders.set("Cache-Control", "no-store")
                 exchange.responseHeaders.set("X-Content-Type-Options", "nosniff")
                 response.headers.forEach { (key, value) -> exchange.responseHeaders.set(key, value) }
+                response.stream?.let { stream->
+                    stream.use { exchange.sendResponseHeaders(response.status,0);stream.write(exchange.responseBody) }
+                    return
+                }
                 val body = response.body?.let { McpJson.gson.toJson(it).toByteArray(Charsets.UTF_8) }
                 if (body == null) exchange.sendResponseHeaders(response.status, -1)
                 else {

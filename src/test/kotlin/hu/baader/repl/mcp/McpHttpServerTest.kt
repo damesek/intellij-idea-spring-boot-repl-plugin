@@ -77,7 +77,12 @@ class McpHttpServerTest {
             val session = initialized.headers().firstValue("MCP-Session-Id").orElseThrow()
             assertEquals(202, send("POST", McpJson.objectOf("jsonrpc" to "2.0", "method" to "notifications/initialized").toString(), session).statusCode())
             assertEquals(200, send("POST", McpJson.objectOf("jsonrpc" to "2.0", "id" to 2, "method" to "tools/list").toString(), session).statusCode())
-            assertEquals(405, send("GET").statusCode())
+            assertEquals(404, send("GET").statusCode())
+            val eventRequest=HttpRequest.newBuilder(URI(server.url)).timeout(Duration.ofSeconds(5))
+                .header("Authorization",token).header("MCP-Session-Id",session).header("Accept","text/event-stream").GET().build()
+            val events=client.send(eventRequest,HttpResponse.BodyHandlers.ofInputStream())
+            assertEquals(200,events.statusCode());assertTrue(events.headers().firstValue("Content-Type").orElse("").startsWith("text/event-stream"))
+            events.body().use { assertEquals(": connected",it.bufferedReader().readLine()) }
             assertEquals(200, send("DELETE", session = session).statusCode())
             assertEquals(0, server.router.clientCount)
         } finally { server.close() }

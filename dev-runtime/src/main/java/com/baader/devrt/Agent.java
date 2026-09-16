@@ -59,6 +59,8 @@ public final class Agent {
     }
 
     private static void installInstrumentation(Path jar, Instrumentation instrumentation) throws Exception {
+        try { installAsyncBridge(instrumentation); }
+        catch(Exception|LinkageError failure) { System.err.println("[sb-repl] Async recording unavailable: "+failure.getClass().getSimpleName()); }
         Path libraries = Files.createTempDirectory("sb-repl-agent-libs-");
         libraries.toFile().deleteOnExit();
         List<URL> urls = new ArrayList<>(); urls.add(jar.toUri().toURL());
@@ -84,6 +86,18 @@ public final class Agent {
             }
         };
         instrumentationLoader.loadClass("com.baader.devrt.AgentInstrumentation").getMethod("install", Instrumentation.class).invoke(null, instrumentation);
+    }
+    private static void installAsyncBridge(Instrumentation instrumentation) throws Exception {
+        Path bridge=Files.createTempFile("sb-repl-bootstrap-", ".jar");bridge.toFile().deleteOnExit();
+        String entry="com/baader/devrt/bootstrap/AsyncBridge.class";
+        try(var output=new JarOutputStream(Files.newOutputStream(bridge));InputStream input=Agent.class.getResourceAsStream("/"+entry)){
+            if(input==null)throw new IOException("Missing bootstrap recording bridge");output.putNextEntry(new JarEntry(entry));input.transferTo(output);output.closeEntry();
+        }
+        instrumentation.appendToBootstrapClassLoaderSearch(new JarFile(bridge.toFile()));
+        Class<?> type=Class.forName("com.baader.devrt.bootstrap.AsyncBridge",true,null);
+        // java.base must be able to call the tiny bridge in the bootstrap unnamed module.
+        instrumentation.redefineModule(Object.class.getModule(),Set.of(type.getModule()),Map.of(),Map.of(),Set.of(),Map.of());
+        type.getField("handler").set(null,(java.util.function.Function<Object[],Object>)AsyncRecorder::dispatch);
     }
     static void configureTrace(Class<?> type, Set<String> methods) throws Exception {
         if (instrumentationLoader == null) throw new IllegalStateException("Tracing requires the bundled agent at JVM startup");

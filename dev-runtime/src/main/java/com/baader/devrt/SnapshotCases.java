@@ -5,8 +5,10 @@ import java.util.function.Consumer;
 
 /** Explicit case execution in a fresh JShell, using the current application's real Spring beans. */
 final class SnapshotCases {
+    static final List<String> HIBERNATE_FIELDS=List.of("max-hibernate-loads","max-hibernate-flushes","max-hibernate-lazy-loads","max-hibernate-response-lazy-loads");
+    static boolean hibernateAssertions(Map<String,String> definition){return HIBERNATE_FIELDS.stream().anyMatch(k->!definition.getOrDefault(k,"").isBlank());}
     private static final Set<String> FIELDS=Set.of("input","expected","type","variable","code","expected-exception","expected-message",
-            "assertions-json","parameters-json","setup","teardown","result-expression","imports","max-duration-ms","tags","disabled");
+            "assertions-json","parameters-json","setup","teardown","result-expression","imports","max-duration-ms","max-sql-count","max-sql-repetitions","max-hibernate-loads","max-hibernate-flushes","max-hibernate-lazy-loads","max-hibernate-response-lazy-loads","tags","disabled","observed-classes");
     static Map<String,String> definition(Map<String,String> request) {
         Map<String,String> value=new LinkedHashMap<>();
         for(String field:FIELDS) value.put(field,request.getOrDefault(field,field.equals("variable")?"input":""));
@@ -20,8 +22,12 @@ final class SnapshotCases {
         if (!value.get("expected-exception").isBlank() && !value.get("expected-exception").matches("[\\w.$]{1,256}")) throw new IllegalArgumentException("Invalid expected exception class");
         if (value.get("expected-message").length() > 65536) throw new IllegalArgumentException("Expected message too long");
         if(!value.get("max-duration-ms").isBlank()) {long max=Long.parseLong(value.get("max-duration-ms"));if(max<1||max>120000)throw new IllegalArgumentException("Maximum duration must be 1–120000 ms");}
+        for(String field:List.of("max-sql-count","max-sql-repetitions","max-hibernate-loads","max-hibernate-flushes","max-hibernate-lazy-loads","max-hibernate-response-lazy-loads")) if(!value.get(field).isBlank()) {
+            long max=Long.parseLong(value.get(field)); if(max<0 || max>1000000) throw new IllegalArgumentException(field+" must be 0–1000000");
+        }
         if(!Set.of("","true","false").contains(value.get("disabled")))throw new IllegalArgumentException("disabled must be true or false");
         if(value.get("tags").length()>1024||!value.get("tags").matches("[\\w, .-]*"))throw new IllegalArgumentException("Use comma-separated tags containing letters, digits, dot, underscore or hyphen");
+        if(value.get("observed-classes").length()>32768||value.get("observed-classes").lines().filter(s->!s.isBlank()).anyMatch(s->!s.matches("[\\w$]+(?:\\.[\\w$]+)*")))throw new IllegalArgumentException("Observed classes must be exact class names, one per line");
         for(String tag:value.get("tags").split(","))if(!tag.isBlank()&&!tag.trim().matches("[\\w.-]+"))throw new IllegalArgumentException("Tags cannot contain spaces");
         CaseAssertions.validate(CaseJson.object(value.get("assertions-json"))); rows(value);
         return value;
@@ -73,15 +79,25 @@ final class SnapshotCases {
                 evaluateStage(shell,definition.get("setup"),output,"Setup");
                 checkStopped(stopped);
                 long executionStart=System.nanoTime();
-                JShellSession.EvalResult evaluation=shell.eval(definition.get("code"));
+                JShellSession.EvalResult evaluation;
+                hu.baader.repl.protocol.SqlSnapshot sql=null;
+                hu.baader.repl.protocol.HibernateSnapshot hibernate=null;
+                boolean ormAssertions=hibernateAssertions(definition);
+                boolean sqlAssertions=!definition.get("max-sql-count").isBlank() || !definition.get("max-sql-repetitions").isBlank();
+                boolean collectOrm=ormAssertions || new HibernateRecorder.Log(true).snapshot().available();
+                try(SqlRecorder.Scope scope=sqlAssertions||ormAssertions||SqlRecorder.available()?SqlRecorder.scope(collectOrm):null) {
+                evaluation=shell.eval(definition.get("code"));
                 output.append(evaluation.output());
                 checkStopped(stopped);
                 if(evaluation.error().isEmpty()&&!evaluation.interrupted()&&!definition.get("result-expression").isBlank()) {
                     evaluation=shell.eval(definition.get("result-expression"));output.append(evaluation.output());
                 }
                 checkStopped(stopped);
+                if(scope!=null) {sql=scope.snapshot();if(collectOrm)hibernate=scope.hibernate();}
+                }
                 long duration=(System.nanoTime()-executionStart)/1_000_000;
                 result.put("code-duration-ms",duration);
+                result.put("exception-type",evaluation.exceptionType());result.put("exception-message",evaluation.exceptionMessage());
                 cancelled=evaluation.interrupted();
                 if(epoch!=SpringContextHolder.epoch())throw new IllegalStateException("Spring context changed during the test case; reset the session");
                 if(cancelled) {result.put("outcome","CANCELLED");result.put("detail",evaluation.error());}
@@ -93,17 +109,42 @@ final class SnapshotCases {
                 else {
                     if(evaluation.handle().isEmpty())throw new IllegalArgumentException("Test code must produce a value to compare");
                     Object actual=shell.value(evaluation.handle(),null);
+                    Object actualData=SnapshotManager.casePayload(actual);
+                    result.put("result-sha256",CaseRegression.fingerprint(actualData));
                     Map<String,Object> options=CaseJson.object(definition.get("assertions-json"));
                     if(options.isEmpty()) {
-                        result.putAll(SnapshotManager.compareValue(definition.get("expected"),actual));
+                        result.putAll(SnapshotDiff.compare(SnapshotManager.dataPayload(definition.get("expected")),actualData,0,100));
                         int changes=((Number)result.get("changes-found")).intValue();boolean limited=Boolean.TRUE.equals(result.get("scan-limited"));
                         result.put("outcome",changes>0?"FAILED":limited?"INCONCLUSIVE":"PASSED");
                         result.put("detail",changes>0?"Result differs from the expected snapshot":limited?"Comparison budget reached":"Result matches the expected snapshot");
                     } else {
-                        CaseAssertions.Report comparison=CaseAssertions.compare(SnapshotManager.dataPayload(definition.get("expected")),SnapshotManager.casePayload(actual),options);
+                        CaseAssertions.Report comparison=CaseAssertions.compare(SnapshotManager.dataPayload(definition.get("expected")),actualData,options);
                         result.put("outcome",comparison.outcome());result.put("detail",comparison.detail());result.put("value",String.join("\n",comparison.failures()));
                     }
                     result.put("event",RuntimeEvents.recordCase(owner,name,System.nanoTime()-start,actual));
+                }
+                if(sql!=null) {
+                    result.put("sql-count",sql.count());result.put("sql-duration-ms",sql.nanos()/1_000_000.0);
+                    result.put("sql-max-repetitions",sql.maxRepetitions());result.put("sql-partial",sql.partial());
+                    if(sqlAssertions && Set.of("PASSED","FAILED","INCONCLUSIVE").contains(result.get("outcome"))) {
+                        boolean exceeded=(!definition.get("max-sql-count").isBlank() && sql.count()>Long.parseLong(definition.get("max-sql-count")))
+                            || (!definition.get("max-sql-repetitions").isBlank() && sql.maxRepetitions()>Long.parseLong(definition.get("max-sql-repetitions")));
+                        if(exceeded) { result.put("outcome","FAILED"); result.put("detail",result.get("detail")+"; SQL budget exceeded (count="+sql.count()+", max repetition="+sql.maxRepetitions()+")"); }
+                        else if(sql.partial() && !"FAILED".equals(result.get("outcome"))) { result.put("outcome","INCONCLUSIVE");result.put("detail",result.get("detail")+"; SQL evidence is incomplete"); }
+                    }
+                }
+                if(hibernate!=null) {
+                    long[] measured={hibernate.count("ENTITY_LOAD"),hibernate.flushCount(),hibernate.lazyCount(),hibernate.responseLazyCount()};
+                    boolean exceeded=false;
+                    for(int i=0;i<HIBERNATE_FIELDS.size();i++) {
+                        String key=HIBERNATE_FIELDS.get(i);result.put(key.substring(4),measured[i]);
+                        if(!definition.get(key).isBlank()&&measured[i]>Long.parseLong(definition.get(key)))exceeded=true;
+                    }
+                    result.put("hibernate-partial",hibernate.partial());
+                    if(ormAssertions && Set.of("PASSED","FAILED","INCONCLUSIVE").contains(result.get("outcome"))) {
+                        if(exceeded){result.put("outcome","FAILED");result.put("detail",result.get("detail")+"; Hibernate budget exceeded");}
+                        else if(hibernate.partial()&&!"FAILED".equals(result.get("outcome"))){result.put("outcome","INCONCLUSIVE");result.put("detail",result.get("detail")+"; Hibernate evidence is incomplete");}
+                    }
                 }
                 if(!definition.get("max-duration-ms").isBlank()&&duration>Long.parseLong(definition.get("max-duration-ms"))&&Set.of("PASSED","FAILED","INCONCLUSIVE").contains(result.get("outcome"))) {
                     result.put("outcome","FAILED");result.put("detail",result.get("detail")+"; maximum code duration exceeded ("+duration+" ms)");

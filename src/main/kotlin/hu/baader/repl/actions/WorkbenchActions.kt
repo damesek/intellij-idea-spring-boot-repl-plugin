@@ -34,7 +34,8 @@ object WorkbenchCatalog {
         Command("ExecutionSettings", "Execution settings", "Session", true), Command("RefreshPolicy", "Refresh execution settings", "Session", true),
         Command("SideEffects", "Side-effect hints", "Tools", true), Command("Audit", "Audit events", "Tools", true),
         Command("InspectResult", "Inspect result", "Result", true), Command("PinResult", "Pin LIVE", "Result", true),
-        Command("SaveResult", "Freeze DATA", "Result", true)
+        Command("SaveResult", "Freeze DATA", "Result", true), Command("WatchResult", "Watch result", "Result", true),
+        Command("BeanExplorer", "Bean explorer", "Tools", true)
     )
     fun byKey(key: String) = commands.firstOrNull { it.key == key }
     fun id(key: String) = "hu.baader.repl.workbench.$key"

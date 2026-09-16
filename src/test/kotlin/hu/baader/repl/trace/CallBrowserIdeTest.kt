@@ -37,6 +37,34 @@ class CallBrowserIdeTest : BasePlatformTestCase() {
             Files.createDirectories(Path.of(it));ImageIO.write(image,"png",Path.of(it,"$name-$width.png").toFile())
         }
     }
+    fun testAsyncHandoffAndNewWorkflowControlsRenderWithoutRunningCode() {
+        val source=source();val controller=RecordingController.get(project)
+        val input=hu.baader.repl.protocol.ValueTree("result","OBJECT","java.util.Map","",listOf(
+            hu.baader.repl.protocol.ValueTree("handoff","OBJECT","java.util.Map","",listOf(
+                hu.baader.repl.protocol.ValueTree.leaf("queueWaitMs","NUMBER","double","12.5"),
+                hu.baader.repl.protocol.ValueTree.leaf("submissionTransactionActive","BOOLEAN","boolean","true"),
+                hu.baader.repl.protocol.ValueTree.leaf("executionTransactionActive","BOOLEAN","boolean","false")))))
+        val root=BrowserFixture.call(1)
+        val boundary=hu.baader.repl.protocol.RecordedCall(root.recording(),2,1,1,"async.Task","execute","(Ljava/util/Map;)V","handoff",9,"worker",root.startedAt()+1,3000000,"SUCCESS","void",input.encode(),"","",-1,2)
+        val c=BrowserFixture.call(3,2,1)
+        val leaf=hu.baader.repl.protocol.RecordedCall(c.recording(),c.id(),c.parent(),c.root(),c.className(),c.method(),c.descriptor(),c.parameterNames(),9,"worker",c.startedAt(),c.durationNanos(),c.status(),c.summary(),c.input(),c.output(),c.exception(),-1,c.revision())
+        val panel=RecordingPanel(project) { fail("Frozen browsing must not evaluate Java") }
+        val beans=hu.baader.repl.ui.BeanExplorerPanel(NreplService.getInstance(project)) { fail("Preparing is explicit") }
+        val watches=hu.baader.repl.ui.WatchPanel(NreplService.getInstance(project))
+        try {
+            controller.open(CallRecording(root.recording(),listOf(root,boundary,leaf),listOf(source),async=AsyncEvidence(true,true)))
+            controller.select(2,false)
+            for(width in listOf(700,1280)){
+                render(panel,"Async-recording",width)
+                val graph=descendants(panel).filterIsInstance<CallGraph>().single()
+                assertEquals(listOf(0,1,2),graph.nodes.map { it.depth })
+                assertFalse(button(panel,"Create CASE from call…").isEnabled)
+                size(beans,width,600);size(watches,width,600)
+                for(label in listOf("Search / refresh","Prepare method call…"))assertTrue(button(beans,label).isVisible)
+                for(label in listOf("Pin watch…","Refresh values","Remove"))assertTrue(button(watches,label).isVisible)
+            }
+        } finally {Disposer.dispose(panel);Disposer.dispose(beans);Disposer.dispose(watches)}
+    }
     fun testZoomHitTestingPanRefreshAndFitWithTwoHundredCalls() {
         var selected: Long?=null
         val graph=CallGraph({ selected=it.id() })
@@ -131,6 +159,55 @@ class CallBrowserIdeTest : BasePlatformTestCase() {
             }
             assertFalse(NreplService.getInstance(project).isConnected())
         } finally { Disposer.dispose(panel) }
+    }
+    fun testSqlGroupsSelectionBaselineAndResponsiveViews() {
+        val source=source();val controller=RecordingController.get(project)
+        val events=(1L..5).map { hu.baader.repl.protocol.SqlObservation(it,2,1,1,1700000000000L+it,1000000,"SQL","executeQuery",
+            "select c.id, c.name from customer c where c.id=?","HikariDataSource@demo","example.Service","run","Service.java",3,"",0) }
+        val sql=hu.baader.repl.protocol.SqlSnapshot(true,true,10,5,0,0,5,events)
+        val record=CallRecording(BrowserFixture.id,BrowserFixture.calls(),listOf(source),sql=sql)
+        val panel=RecordingPanel(project) { fail("SQL browsing cannot execute Java") }
+        try {
+            controller.open(record);size(panel,1280)
+            val graph=descendants(panel).filterIsInstance<CallGraph>().single()
+            assertEquals(7,graph.nodes.size)
+            val node=graph.nodes.single { it.call.id()>=RecordingSql.BASE }
+            graph.dispatchEvent(MouseEvent(graph,MouseEvent.MOUSE_CLICKED,1,0,node.bounds.x+80,node.bounds.y+50,1,false,MouseEvent.BUTTON1))
+            val details=descendants(panel).filterIsInstance<JTabbedPane>().single { it.indexOfTab("SQL & N+1")>=0 }
+            assertEquals("SQL & N+1",details.getTitleAt(details.selectedIndex))
+            assertTrue(descendants(panel).filterIsInstance<JTextArea>().any { it.text.contains("select c.id") })
+            button(panel,"Open originating call and source").doClick();assertEquals(2L,controller.selected)
+            button(panel,"Pin SQL baseline").doClick()
+            for(width in listOf(700,1280)) render(panel,"SQL-NPlusOne",width)
+            descendants(panel).filterIsInstance<JCheckBox>().single { it.text=="Group SQL" }.doClick()
+            assertEquals(11,graph.nodes.size)
+            val nextId=java.util.UUID.randomUUID().toString()
+            controller.open(CallRecording.decode(record.copy(sql=hu.baader.repl.protocol.SqlSnapshot(true,true,1,1,0,0,5,events.take(1))).encode().replace(record.id,nextId)))
+            assertTrue(descendants(panel).filterIsInstance<JTextArea>().any { it.text.contains("SQL count Δ -4") })
+        } finally {Disposer.dispose(panel)}
+    }
+    fun testHibernateGraphSelectionOriginAndResponsiveDetails() {
+        val source=source();val controller=RecordingController.get(project)
+        val orm=(1L..5).map{hu.baader.repl.protocol.HibernateObservation(it,0,2,1,1,1700000000000L+it,2000000,"session-demo","LAZY_ENTITY","example.Customer","example.Order.customer","","example.Service","run","Service.java",3,"",it==1L)}
+        val sql=orm.map{hu.baader.repl.protocol.SqlObservation(it.id(),2,1,1,it.startedAt(),1000000,"SQL","executeQuery","select c.name from customer c where c.id=?","pool","example.Service","run","Service.java",3,"",0,it.id())}
+        val record=CallRecording(BrowserFixture.id,BrowserFixture.calls(),listOf(source),sql=hu.baader.repl.protocol.SqlSnapshot(true,true,10,5,0,0,5,sql),hibernate=hu.baader.repl.protocol.HibernateSnapshot(true,true,"6.6.29.Final",10,0,0,orm))
+        val panel=RecordingPanel(project){fail("ORM browsing cannot execute Java")}
+        try {
+            controller.open(record);size(panel,1280)
+            val graph=descendants(panel).filterIsInstance<CallGraph>().single()
+            assertEquals(16,graph.nodes.size)
+            val node=graph.nodes.single{it.call.id()==RecordingHibernate.BASE+1}
+            graph.dispatchEvent(MouseEvent(graph,MouseEvent.MOUSE_CLICKED,1,0,node.bounds.x+80,node.bounds.y+50,1,false,MouseEvent.BUTTON1))
+            val tabs=descendants(panel).filterIsInstance<JTabbedPane>().single{it.indexOfTab("Hibernate")>=0}
+            assertEquals("Hibernate",tabs.getTitleAt(tabs.selectedIndex))
+            assertTrue(descendants(panel).filterIsInstance<JTextArea>().any{it.text.contains("Relationship: example.Order.customer")&&it.text.contains("SQL #1")})
+            button(panel,"Pin Hibernate baseline").doClick()
+            for(width in listOf(700,1280))render(panel,"Hibernate-flow",width)
+            button(panel,"Open originating call").doClick();assertEquals(2L,controller.selected)
+            val id=java.util.UUID.randomUUID().toString()
+            controller.open(CallRecording.decode(record.copy(sql=hu.baader.repl.protocol.SqlSnapshot(true,true,1,1,0,0,5,sql.take(1)),hibernate=hu.baader.repl.protocol.HibernateSnapshot(true,true,"6.6.29.Final",1,0,0,orm.take(1))).encode().replace(record.id,id)))
+            assertTrue(descendants(panel).filterIsInstance<JTextArea>().any{it.text.contains("lazy -4")})
+        }finally{Disposer.dispose(panel)}
     }
     fun testSearchIsDebouncedAndRevealsCapturedValuesAcrossClosedBranches() {
         val controller=RecordingController.get(project);val panel=RecordingPanel(project) {}

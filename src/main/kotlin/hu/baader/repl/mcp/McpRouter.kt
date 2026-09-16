@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal data class McpHttpRequest(val method: String, val path: String, val headers: Map<String, String>, val body: String = "") {
     fun header(name: String) = headers.entries.firstOrNull { it.key.equals(name, true) }?.value
 }
-internal data class McpHttpResponse(val status: Int, val body: JsonObject? = null, val headers: Map<String, String> = emptyMap())
+internal data class McpHttpResponse(val status: Int, val body: JsonObject? = null, val headers: Map<String, String> = emptyMap(), val stream: McpEvents.Stream? = null)
 
 /** MCP 2025 Streamable HTTP, JSON responses, stateful sessions. Independent of IntelliJ and sockets for tests. */
 internal class McpRouter(
@@ -30,12 +30,17 @@ internal class McpRouter(
         var calls = 0
         val seen = HashSet<String>()
         var running: String? = null
+        val tasks=linkedMapOf<String,McpTask>()
+        val events=McpEvents()
+        val retrieving=AtomicBoolean()
         @Volatile var initialized = false
         @Volatile var touched = now
         @Volatile var closed = false
+        @Volatile var unavailable = false
     }
     private val sessions = ConcurrentHashMap<String, Session>()
     private val capacity = Semaphore(4)
+    private val taskExecutor=java.util.concurrent.Executors.newFixedThreadPool(4) { r->Thread(r,"sb-repl-mcp-task").apply { isDaemon=true } }
     private val closed = AtomicBoolean()
     val clientCount get() = sessions.size
     @Volatile var lastTool = ""
@@ -43,7 +48,7 @@ internal class McpRouter(
 
     fun handle(request: McpHttpRequest): McpHttpResponse {
         preflight(request)?.let { return it }
-        if (request.method == "GET") return McpHttpResponse(405, headers = mapOf("Allow" to "POST, DELETE"))
+        if (request.method == "GET") return stream(request)
         val sessionId = request.header("MCP-Session-Id")
         if (request.method == "DELETE") {
             if (sessionId == null) return httpError(400, "MCP-Session-Id required")
@@ -86,7 +91,7 @@ internal class McpRouter(
                     val cancelled = params["requestId"]
                     // Serialize dispatch with completion/start so cancellation cannot interrupt the next call.
                     synchronized(session) {
-                        if (cancelled != null && validId(cancelled) && session.running == idKey(cancelled)) session.backend.request("interrupt")
+                        if (cancelled != null && validId(cancelled) && session.running == idKey(cancelled) && session.tasks.values.none { it.requestKey==idKey(cancelled) }) session.backend.request("interrupt")
                     }
                 }
             }
@@ -102,9 +107,19 @@ internal class McpRouter(
             when (method) {
                 "tools/list" -> {
                     if (params.has("cursor")) throw McpError(-32602, "Tool list has no cursor")
-                    success(id, McpJson.objectOf("tools" to McpTools.all.filter { it.enabled(permissions) }.map { it.descriptor() }))
+                    success(id, McpJson.objectOf("tools" to McpTools.all.filter { it.enabled(permissions) }.map { tool->tool.descriptor().apply { if(session.version==VERSIONS.first() && tool.taskSupport)add("execution",McpJson.objectOf("taskSupport" to "optional")) } }))
                 }
-                "tools/call" -> call(id, params, session)
+                "tools/call" -> if(params.has("task") && session.version==VERSIONS.first()) startTask(id,params,session) else call(id, params, session)
+                "resources/list" -> {if(params.has("cursor"))throw McpError(-32602,"Resource list has no cursor");success(id,McpJson.objectOf("resources" to listOf(McpJson.objectOf("uri" to McpEvents.URI,"name" to "REPL session events","mimeType" to "application/json","description" to "Metadata-only capture, context, execution and recording notifications; session isolated."))))}
+                "resources/templates/list" -> success(id,McpJson.objectOf("resourceTemplates" to emptyList<Any>()))
+                "resources/read", "resources/subscribe", "resources/unsubscribe" -> {
+                    if(McpJson.string(params,"uri")!=McpEvents.URI)throw McpError(-32002,"Unknown resource")
+                    when(method){
+                        "resources/read" -> success(id,McpJson.objectOf("contents" to listOf(McpJson.objectOf("uri" to McpEvents.URI,"mimeType" to "application/json","text" to session.events.resource.toString()))))
+                        else -> {session.events.subscribed=method=="resources/subscribe";if(session.events.subscribed)session.events.emit("notifications/resources/updated",McpJson.objectOf("uri" to McpEvents.URI));success(id,JsonObject())}
+                    }
+                }
+                "tasks/list", "tasks/get", "tasks/cancel", "tasks/result" -> tasks(id,method,params,session)
                 else -> rpcError(id, -32601, "Unknown method: ${method.take(128)}")
             }
         } catch (e: McpError) { rpcError(id, e.code, e.message) }
@@ -148,13 +163,15 @@ internal class McpRouter(
         }
         changed()
         return success(id, McpJson.objectOf("protocolVersion" to session.version,
-            "capabilities" to McpJson.objectOf("tools" to McpJson.objectOf("listChanged" to false)),
-            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "version" to "0.20.0"),
+            "capabilities" to McpJson.objectOf("tools" to McpJson.objectOf("listChanged" to false),"resources" to McpJson.objectOf("subscribe" to true,"listChanged" to false)).apply {
+                if(session.version==VERSIONS.first())add("tasks",McpJson.objectOf("list" to JsonObject(),"cancel" to JsonObject(),"requests" to McpJson.objectOf("tools" to McpJson.objectOf("call" to JsonObject()))))
+            },
+            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "version" to "0.23.0"),
             "instructions" to "Use repl_status, then repl_analyze before repl_eval. If Spring was still starting when connected, use repl_bind_spring once context-ready is true. Variables and handles belong to this MCP session; Spring beans, application effects and persistent DATA snapshots are shared. Never replay execution after a timeout or lost response. Use repl_interrupt for a running call. Reset explicitly after a Spring context change. Sessions expire after 30 idle minutes. Large results are bounded previews."),
             mapOf("MCP-Session-Id" to sessionId))
     }
 
-    private fun call(id: JsonElement, params: JsonObject, session: Session): McpHttpResponse {
+    private fun call(id: JsonElement, params: JsonObject, session: Session, task: McpTask? = null): McpHttpResponse {
         val name = McpJson.string(params, "name") ?: throw McpError(-32602, "Tool name required")
         val tool = McpTools.all.find { it.name == name } ?: throw McpError(-32602, "Unknown tool: ${name.take(128)}")
         if (!tool.enabled(permissions)) {
@@ -168,17 +185,18 @@ internal class McpRouter(
         val auditId = audit(session, tool.name, "STARTED", arguments)
         try {
             val pending = synchronized(session) {
-                if (session.closed) { audit(session, tool.name, "CLOSED", mapOf("request" to auditId)); return success(id, McpTools.error("Session closed")) }
-                if (!control && session.running != null) { audit(session, tool.name, "BUSY", mapOf("request" to auditId)); return success(id, McpTools.error("Session is busy. Wait for completion or use repl_interrupt.")) }
-                if (!control && session.calls >= permissions.sessionQuota) {
+                if (session.closed || session.unavailable) { audit(session, tool.name, "CLOSED", mapOf("request" to auditId)); return success(id, McpTools.error("REPL session closed or unavailable; task results remain readable")) }
+                if(task?.cancelled()==true)return success(id,McpTools.error("Task cancelled before dispatch"))
+                if (!control && session.running != null && session.running != task?.requestKey) { audit(session, tool.name, "BUSY", mapOf("request" to auditId)); return success(id, McpTools.error("Session is busy. Wait for completion or use repl_interrupt.")) }
+                if (!control && task==null && session.calls >= permissions.sessionQuota) {
                     audit(session, tool.name, "QUOTA_DENIED", mapOf("request" to auditId))
                     return success(id, McpTools.error("Session tool-call quota reached. Close this session; review usage before starting another."))
                 }
-                if (!control) session.calls++
+                if (!control && task==null) session.calls++
                 if (!control) session.running = idKey(id)
                 val supplied = (if (tool.paged) emptyMap() else arguments).toMutableMap()
                 supplied["audit-actor"] = "MCP ${session.client} (${session.auditOwner})"
-                if (tool.operation in setOf("eval", "case/run", "case/run-batch", "case/export-junit")) {
+                if (tool.operation in setOf("eval", "case/run", "case/run-batch", "case/export-junit", "watch/refresh")) {
                     supplied["execution-mode"] = permissions.executionMode
                     supplied["transaction-manager"] = permissions.transactionManager
                     supplied["timeout-ms"] = permissions.timeoutMillis.toString()
@@ -201,10 +219,93 @@ internal class McpRouter(
             if (e is InterruptedException) Thread.currentThread().interrupt()
             // On an uncertain transport outcome close the session: do not let a second eval race the old one.
             if (cause is TimeoutException || e is InterruptedException) session.backend.request("interrupt")
-            sessions.entries.find { it.value === session }?.let { remove(it.key, session) }
+            if(task!=null){session.unavailable=true;runCatching { session.backend.close() }}
+            else sessions.entries.find { it.value === session }?.let { remove(it.key, session) }
             return success(id, McpTools.error("REPL request did not complete; this session was closed. Application effects may already have occurred. Check the app before creating a new session; do not automatically retry execution."))
         } finally {
             synchronized(session) { if (session.running == idKey(id)) session.running = null; session.touched = clock() }
+        }
+    }
+
+    private fun stream(request:McpHttpRequest):McpHttpResponse {
+        val sessionId=request.header("MCP-Session-Id") ?: return httpError(404,"Session missing or expired")
+        val session=sessions[sessionId] ?: return httpError(404,"Session missing or expired")
+        if(!session.initialized)return httpError(400,"Send notifications/initialized first")
+        if(request.header("MCP-Protocol-Version")?.let { it!=session.version }==true)return httpError(400,"Protocol version does not match session")
+        if(request.header("Accept").orEmpty().split(',').none { it.substringBefore(';').trim() in setOf("text/event-stream","*/*") })return httpError(406,"Accept text/event-stream required")
+        return try {session.touched=clock();McpHttpResponse(200,headers=mapOf("Content-Type" to "text/event-stream"),stream=session.events.open(request.header("Last-Event-ID")))}
+        catch(e:Exception){httpError(409,e.message ?: "Event stream unavailable")}
+    }
+    /** Called by the server timer. One outstanding metadata poll per client; never evaluates Java. */
+    fun pollEvents(){
+        sessions.values.filter { it.initialized&&!it.closed&&!it.unavailable }.forEach { session->
+            if(session.events.polling.compareAndSet(false,true))try {
+                session.backend.request("notifications/poll",mapOf("cursor" to session.events.cursor))
+                    .orTimeout(5,TimeUnit.SECONDS).whenComplete { response,error->
+                        try{if(error==null&&!session.closed)session.events.update(response)}finally{session.events.polling.set(false)}
+                    }
+            }catch(_:Exception){session.events.polling.set(false)}
+        }
+    }
+    private fun startTask(id:JsonElement,params:JsonObject,session:Session):McpHttpResponse {
+        val tool=McpTools.all.find { it.name==McpJson.string(params,"name") } ?: throw McpError(-32602,"Unknown tool")
+        if(!tool.taskSupport)throw McpError(-32601,"This tool does not support tasks")
+        if(!tool.enabled(permissions))return call(id,params,session)
+        val input=params["arguments"]?.let { if(!it.isJsonObject)throw McpError(-32602,"Arguments must be an object");it.asJsonObject } ?: JsonObject()
+        tool.arguments(input)
+        val options=params["task"]?.takeIf { it.isJsonObject }?.asJsonObject ?: throw McpError(-32602,"task must be an object")
+        val wanted=options["ttl"]?.let { value->if(!value.isJsonPrimitive||!value.asJsonPrimitive.isNumber)throw McpError(-32602,"Invalid task ttl");runCatching { value.asBigDecimal.longValueExact().also { require(it>0) } }.getOrElse { throw McpError(-32602,"Invalid task ttl") } } ?: 600000L
+        val task=McpTask(idKey(id),wanted.coerceIn((permissions.timeoutMillis+60000).toLong(),1800000))
+        val initial=synchronized(session){
+            pruneTasks(session)
+            if(session.closed||session.unavailable||session.running!=null)throw McpError(-32000,"Session closed or busy; execution was not started")
+            if(session.tasks.size>=20)throw McpError(-32000,"Task limit reached (20); wait for retained results to expire")
+            if(session.calls>=permissions.sessionQuota)throw McpError(-32000,"Session tool-call quota reached")
+            session.calls++;session.running=task.requestKey;session.tasks[task.id]=task
+            task.view()
+        }
+        try{taskExecutor.execute {
+            val response=try {call(id,params,session,task).body!!}catch(_:Exception){rpcError(id,-32603,"Task could not complete; do not automatically retry").body!!}
+            synchronized(session){
+                task.complete(response)
+                if(session.running==task.requestKey)session.running=null
+                session.events.emit("notifications/tasks/status",task.view())
+            }
+        }}catch(_:java.util.concurrent.RejectedExecutionException){
+            synchronized(session){session.running=null;session.tasks.remove(task.id);session.calls--}
+            throw McpError(-32000,"Task executor closed; execution was not started")
+        }
+        return success(id,McpJson.objectOf("task" to initial))
+    }
+    private fun pruneTasks(session:Session){session.tasks.entries.removeIf { (_,task)->task.terminal()&&System.currentTimeMillis()-task.createdMillis>task.ttl }}
+    private fun tasks(id:JsonElement,method:String,params:JsonObject,session:Session):McpHttpResponse {
+        if(session.version!=VERSIONS.first())throw McpError(-32601,"Tasks require MCP 2025-11-25")
+        val task=synchronized(session){
+            pruneTasks(session)
+            if(method=="tasks/list"){
+                if(params.has("cursor"))throw McpError(-32602,"Task list has no cursor; at most 20 tasks")
+                return success(id,McpJson.objectOf("tasks" to session.tasks.values.map { it.view() }))
+            }
+            session.tasks[McpJson.string(params,"taskId")] ?: throw McpError(-32602,"Unknown task in this session")
+        }
+        return when(method){
+            "tasks/get" -> success(id,task.view())
+            "tasks/cancel" -> synchronized(session){
+                audit(session,"tasks/cancel","REQUESTED",mapOf("taskId" to task.id))
+                task.cancel()
+                if(session.running==task.requestKey)session.backend.request("interrupt")
+                session.events.emit("notifications/tasks/status",task.view())
+                success(id,task.view())
+            }
+            else -> {
+                if(!session.retrieving.compareAndSet(false,true))throw McpError(-32000,"One pending tasks/result per session; use tasks/get")
+                try {
+                    val original=task.result.get((permissions.timeoutMillis+10000).toLong(),TimeUnit.MILLISECONDS).deepCopy()
+                    original.add("id",id);original.addProperty("jsonrpc","2.0")
+                    original["result"]?.asJsonObject?.add("_meta",McpJson.objectOf("io.modelcontextprotocol/related-task" to McpJson.objectOf("taskId" to task.id)))
+                    McpHttpResponse(200,original)
+                }finally{session.retrieving.set(false)}
+            }
         }
     }
 
@@ -223,7 +324,11 @@ internal class McpRouter(
     }
     private fun remove(id: String, session: Session) {
         if (sessions.remove(id, session)) {
-            synchronized(session) { session.closed = true }
+            synchronized(session) {
+                session.closed = true
+                session.events.close()
+                session.tasks.values.filter { !it.terminal() }.forEach { it.cancel() }
+            }
             runCatching { session.backend.close() }
             capacity.release(); changed()
         }
@@ -231,6 +336,7 @@ internal class McpRouter(
     override fun close() {
         synchronized(sessions) { if (!closed.compareAndSet(false, true)) return }
         sessions.forEach { (id, session) -> remove(id, session) }
+        taskExecutor.shutdownNow()
     }
     private fun validId(id: JsonElement) = id.isJsonPrimitive && (id.asJsonPrimitive.isString && id.asString.length in 1..256 ||
         id.asJsonPrimitive.isNumber && runCatching { id.asBigDecimal.longValueExact(); true }.getOrDefault(false))

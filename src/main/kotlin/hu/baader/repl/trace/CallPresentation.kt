@@ -6,7 +6,7 @@ import hu.baader.repl.ui.ValueDisplay
 import java.util.Locale
 
 /** All browsing/searching uses frozen display data, never application objects. */
-data class CallPresentation(val call: RecordedCall) {
+data class CallPresentation(val call: RecordedCall, val sqlBadge: String = "") {
     val input = tree(call.input())
     val output = tree(call.output())
     val exception = tree(call.exception())
@@ -32,6 +32,12 @@ data class CallPresentation(val call: RecordedCall) {
         else -> false
     }
     val badge = when {
+        call.className()=="async.Task" -> {
+            val handoff=input?.children()?.firstOrNull()
+            val wait=handoff?.children()?.firstOrNull { it.label()=="queueWaitMs" }?.text()?.toDoubleOrNull()
+            "ASYNC"+(if(wait==null)"" else " · queue ${"%.2f".format(Locale.ROOT,wait)} ms")+(if(sqlBadge.isEmpty())"" else " · $sqlBadge")
+        }
+        sqlBadge.isNotEmpty() -> sqlBadge
         call.status() == "INCOMPLETE" -> "INCOMPLETE"
         unavailable -> "VALUES UNAVAILABLE"
         partial -> "PARTIAL PREVIEW"
@@ -40,7 +46,7 @@ data class CallPresentation(val call: RecordedCall) {
     // Lazy so ordinary refreshes do not repeatedly allocate/search large previews.
     val searchable: String by lazy {
         buildString {
-            append(signature); append(' '); append(call.summary()); append(' '); append(call.threadName())
+            append(signature); append(' '); append(sqlBadge); append(' '); append(call.summary()); append(' '); append(call.threadName())
             fun add(node: ValueTree) {
                 append(' '); append(node.label()); append(' '); append(node.type()); append(' '); append(node.text())
                 node.children().forEach(::add)
@@ -124,7 +130,7 @@ object CallNavigation {
         val index = calls.associateBy { it.id() }
         val result = mutableListOf<RecordedCall>()
         var call = index[id]
-        while (call != null && result.size < RecordedCall.MAX_CALLS) {
+        while (call != null && result.size <= calls.size) {
             result += call; call = index[call.parent()]
         }
         return result.reversed()

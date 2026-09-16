@@ -72,6 +72,11 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             editor.contentComponent.requestFocusInWindow()
         }
         lateinit var variables: LoadedVariablesPanel
+        val beans = BeanExplorerPanel(service, insert)
+        val watches = WatchPanel(service)
+        Disposer.register(toolWindow.disposable, beans)
+        Disposer.register(toolWindow.disposable, watches)
+        resultTabs.addTab("Watches", watches)
         val snapshots = SimplifiedSnapshotsPanel({ service }, insert, { _, _ -> variables.refreshVariables() })
         val inspector = InspectorPanel(service) { variables.refreshVariables(); snapshots.refresh() }
         val inspectValue: (Map<String,String>) -> Unit = { extra -> inspector.open(extra); tabs.selectedComponent = inspector }
@@ -135,6 +140,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         button("Check code") { diagnostics.request() }
         button("Help (PDF)") { ReplHelp.open(project) }
         button("MCP") { tabs.selectedComponent = mcp }
+        button("Bean explorer") { tabs.selectedComponent = beans; beans.refresh() }
 
         lateinit var http: HttpRequestsPanel
         val workspaceActions = hu.baader.repl.workspace.WorkspaceActions(project, service, workspaceStore, notebook, { http }, { transcript.text }, { transcript.text = it }, { snapshots.refresh(); cases.refresh(); variables.refreshVariables() }, { status.text = it }, { busy })
@@ -236,6 +242,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             resultBar.add(JButton(label).apply { addActionListener { if (service.isConnected() && resultHandle != null) action() } })
         }
         resultButton("Inspect result") { resultHandle?.let { inspectValue(mapOf("handle" to it)) } }
+        resultButton("Watch result") { resultTabs.selectedComponent=watches;watches.pin("last1") }
         resultButton("Pin LIVE") { saveResult("snapshot/pin") }
         resultButton("Freeze DATA") { saveResult("snapshot/save") }
         val resultPanel = JPanel(BorderLayout()).apply {
@@ -269,6 +276,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         tabs.addTab("AI", AiAssistedPanel(project, service, AiContextMetadataStore.getInstance(project), insert) { tabs.selectedIndex = 0 })
         tabs.addTab("Imports", ImportAliasesPanel())
         tabs.addTab("MCP", mcp)
+        tabs.addTab("Beans", beans)
         tabs.addChangeListener {
             when (tabs.selectedIndex) { 1 -> variables.refreshVariables(); 2 -> snapshots.refresh() }
             if (tabs.selectedComponent === events) events.refresh()

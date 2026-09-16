@@ -136,9 +136,18 @@
         <action id="hu.baader.repl.OpenHelp"
                 class="hu.baader.repl.actions.OpenReplHelpAction"
                 text="Help (PDF)"
-                description="Open the offline Hungarian guide with features, shortcuts and examples">
+                description="Choose the English or Hungarian offline manual"/>
+        <group id="hu.baader.repl.HelpGuides" text="Help (PDF)" popup="true">
             <add-to-group group-id="hu.baader.repl.SpringReplGroup" anchor="last"/>
-        </action>
+            <action id="hu.baader.repl.OpenHelpEnglish"
+                    class="hu.baader.repl.actions.OpenEnglishReplHelpAction"
+                    text="English"
+                    description="Open the English offline manual with tabs, buttons, shortcuts and MCP tools"/>
+            <action id="hu.baader.repl.OpenHelpHungarian"
+                    class="hu.baader.repl.actions.OpenHungarianReplHelpAction"
+                    text="Magyar"
+                    description="Magyar offline kézikönyv: fülek, gombok, gyorsbillentyűk és MCP-eszközök"/>
+        </group>
 
         <!-- Shared workbench actions: toolbar, Find Action and Keymap. -->
         <action id="hu.baader.repl.workbench.Connect" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Connect" icon="AllIcons.Actions.Resume"/>
@@ -183,5 +192,7 @@
         <action id="hu.baader.repl.workbench.InspectResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Inspect result"/>
         <action id="hu.baader.repl.workbench.PinResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Pin LIVE"/>
         <action id="hu.baader.repl.workbench.SaveResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Freeze DATA"/>
+        <action id="hu.baader.repl.workbench.WatchResult" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Watch result"/>
+        <action id="hu.baader.repl.workbench.BeanExplorer" class="hu.baader.repl.actions.WorkbenchCommandAction" text="REPL: Bean explorer"/>
     </actions>
 </idea-plugin>

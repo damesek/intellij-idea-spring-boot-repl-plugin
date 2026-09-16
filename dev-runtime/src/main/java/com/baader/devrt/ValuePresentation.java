@@ -37,6 +37,9 @@ final class ValuePresentation {
         return value;
     }
     private ValueTree node(String label, Object value, int depth, String path) {
+        return node(label,value,depth,path,null);
+    }
+    private ValueTree node(String label, Object value, int depth, String path,HibernateAccess.View ormContents) {
         String type = ObjectInspector.typeName(value);
         if (++nodes > MAX_NODES || characters >= MAX_TEXT) return limit(label, type, "Preview budget reached");
         if (value == null) return ValueTree.leaf(label, "NULL", "null", "null");
@@ -48,6 +51,14 @@ final class ValuePresentation {
             return number(label, type, value);
         if (value instanceof Character || value instanceof Enum<?> || value instanceof Class<?>)
             return ValueTree.leaf(label, "STRING", type, ObjectInspector.preview(value));
+        HibernateAccess.View orm=ormContents!=null?null:HibernateAccess.view(value);
+        if(orm!=null) {
+            List<ValueTree> fields=new ArrayList<>();
+            orm.metadata().forEach((key,text)->fields.add(ValueTree.leaf("hibernate."+key,"STRING","",text(text,4096))));
+            if(orm.opaque())fields.add(limit("contents",type,"Not expanded; Hibernate relationships are not initialized by inspection"));
+            else fields.add(node("contents",orm.contents(),depth+1,path+".contents",orm));
+            return new ValueTree(label,"OBJECT",type,"",fields);
+        }
         String earlier = seen.putIfAbsent(value, path);
         if (earlier != null) return ValueTree.leaf(label, "REFERENCE", type, earlier);
         if (depth >= MAX_DEPTH) return limit(label, type, "Depth limit; open this value in Inspector → Fields");
@@ -102,7 +113,7 @@ final class ValuePresentation {
                 List<Field> fields = new ArrayList<>();
                 for (Class<?> parent=clazz; parent!=null && fields.size()<1000; parent=parent.getSuperclass()) {
                     for (Field field : parent.getDeclaredFields()) {
-                        if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) fields.add(field);
+                        if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic() && !field.getName().startsWith("$$_hibernate_")) fields.add(field);
                         if (fields.size() >= 1000) break;
                     }
                 }
@@ -111,7 +122,8 @@ final class ValuePresentation {
                     if (!room(children)) break;
                     String key = field.getName();
                     if (fields.stream().filter(f -> f.getName().equals(field.getName())).count()>1) key=field.getDeclaringClass().getSimpleName()+"."+key;
-                    if (!field.trySetAccessible()) children.add(ValueTree.leaf(key, "ERROR", field.getType().getTypeName(), "Field is not open to the agent"));
+                    if(ormContents!=null&&ormContents.unfetched().contains(field.getName()))children.add(limit(key,field.getType().getTypeName(),"Unfetched Hibernate attribute; not read"));
+                    else if (!field.trySetAccessible()) children.add(ValueTree.leaf(key, "ERROR", field.getType().getTypeName(), "Field is not open to the agent"));
                     else children.add(node(key, field.get(value), depth+1, path+"."+key));
                 }
                 if (fields.size()>children.size()) children.add(limit("…", "", "More fields; preview limit reached"));

@@ -66,6 +66,12 @@ class InspectorPanel(private val service: NreplService, private val changed: () 
             service.request("inspector/bind", mapOf("var" to variable.text.trim(), "type" to type.text.trim()), { breadcrumb.text = it["value"]; changed() }, ::error)
         } })
         actions.add(JLabel("Snapshot:")); actions.add(snapshot)
+        actions.add(JButton("Edit DATA copy…").apply { addActionListener {
+            val name=snapshot.text.trim()+"-original-"+java.util.UUID.randomUUID().toString().take(8)
+            service.request("snapshot/save",mapOf("inspected" to "true","name" to name,"type" to type.text.trim()),{
+                changed();DataCopyEditor.open(service,name,changed,::error)
+            },::error)
+        } })
         for ((label, op) in listOf("Freeze DATA" to "snapshot/save", "Pin LIVE" to "snapshot/pin")) actions.add(JButton(label).apply { addActionListener {
             service.request(op, mapOf("inspected" to "true", "name" to snapshot.text.trim(), "type" to type.text.trim()), { breadcrumb.text = it["value"]; changed() }, ::error)
         } })
@@ -95,7 +101,8 @@ class InspectorPanel(private val service: NreplService, private val changed: () 
             bookmarkPath = it["bookmark-path"].orEmpty()
             structured.showValue(it, it["preview"].orEmpty())
             summary.text = it["type"].orEmpty() + "\n" + it["preview"].orEmpty() + "\nLive object; getters are not invoked." +
-                if (it["scan-limited"] == "true") " First 10000 children only." else ""
+                (if (it["scan-limited"] == "true") " First 10000 children only." else "") +
+                it.entries.filter { entry -> entry.key.startsWith("hibernate-") }.joinToString("",prefix="") { entry -> "\n${entry.key.removePrefix("hibernate-")}: ${entry.value}" }
             next.isEnabled = it["has-more"] == "true" && offset < 9950
         }, { if (!disposed && request == generation) error(it) })
     }

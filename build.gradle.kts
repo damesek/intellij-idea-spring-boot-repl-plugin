@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.Copy
 import org.gradle.jvm.tasks.Jar
+import java.security.MessageDigest
 
 plugins {
     id("java")
@@ -8,7 +9,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.20.0"
+version = "0.23.0"
 
 repositories {
     mavenCentral()
@@ -60,8 +61,37 @@ java {
     }
 }
 
+val helpLanguages = listOf("hu", "en")
+val verifyBundledHelp by tasks.registering {
+    group = "verification"
+    description = "Verify that both offline manuals match their sources and repository copies."
+    inputs.property("pluginVersion", project.version.toString())
+    for (language in helpLanguages) {
+        inputs.file("docs/repl-help-$language.md")
+        inputs.file("output/pdf/spring-boot-repl-guide-$language.pdf")
+        inputs.file("src/main/resources/help/spring-boot-repl-guide-$language.pdf")
+        inputs.file("src/main/resources/help/spring-boot-repl-guide-$language.source.sha256")
+    }
+    doLast {
+        for (language in helpLanguages) {
+            val source = file("docs/repl-help-$language.md").readText(Charsets.UTF_8)
+                .replace("{{version}}", project.version.toString())
+            val digest = MessageDigest.getInstance("SHA-256")
+                .digest(source.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+            check(file("src/main/resources/help/spring-boot-repl-guide-$language.source.sha256").readText().trim() == digest) {
+                "The $language manual is stale. Run python3 scripts/build-help-pdf.py."
+            }
+            val bundled = file("src/main/resources/help/spring-boot-repl-guide-$language.pdf").readBytes()
+            check(bundled.size > 5 && String(bundled, 0, 5, Charsets.US_ASCII) == "%PDF-") { "Invalid $language PDF" }
+            check(bundled.contentEquals(file("output/pdf/spring-boot-repl-guide-$language.pdf").readBytes())) {
+                "The bundled and repository $language PDFs differ. Run python3 scripts/build-help-pdf.py."
+            }
+        }
+    }
+}
+
 tasks.processResources {
-    dependsOn(copyDevRuntimeAgent)
+    dependsOn(copyDevRuntimeAgent, verifyBundledHelp)
 }
 
 intellijPlatform {

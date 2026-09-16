@@ -11,7 +11,9 @@ public final class ReplHandler implements AutoCloseable {
     private volatile boolean closed;
     private final ReplBindings.Scope contextListener = SpringContextHolder.observe(() -> {
         Object current = SpringContextHolder.get();
-        for (Session session : sessions.values()) if (session.context != null && session.context != current) {
+        for (Session session : sessions.values()) {
+            ReplNotifications.publish(session.id,"context.changed",Map.of("ready",current!=null));
+            if(session.context == null || session.context == current)continue;
             session.expired = true;
             session.interrupt();
             try { session.queue.execute(() -> { synchronized (session) { session.invalidate(); } }); }
@@ -27,6 +29,7 @@ public final class ReplHandler implements AutoCloseable {
         final Map<String,Map<String,Object>> caseResults = new LinkedHashMap<>();
         final java.util.concurrent.atomic.AtomicLong interruptions = new java.util.concurrent.atomic.AtomicLong();
         final ObjectInspector inspector = new ObjectInspector();
+        final SessionWatches watches = new SessionWatches();
         volatile Object context;
         volatile boolean closing;
         volatile boolean expired;
@@ -35,14 +38,14 @@ public final class ReplHandler implements AutoCloseable {
                 runnable -> { Thread thread = new Thread(runnable, "sb-repl-session"); thread.setDaemon(true); return thread; });
         Session() { context = SpringContextHolder.get(); shell = new JShellSession(context); }
         void interrupt() { interruptions.incrementAndGet(); shell.interrupt(); JShellSession running=caseShell; if(running!=null) running.interrupt(); }
-        void cleanup() { if (cleaned.compareAndSet(false, true)) { shell.close(); inspector.clear(); caseResults.clear(); SnapshotManager.release(id); RuntimeEvents.release(id); } }
-        void invalidate() { if (expired) { shell.close(); inspector.clear(); caseResults.clear(); context = null; SnapshotManager.release(id); RuntimeEvents.release(id); } }
+        void cleanup() { if (cleaned.compareAndSet(false, true)) { shell.close(); inspector.clear(); watches.clear(); caseResults.clear(); SnapshotManager.release(id); RuntimeEvents.release(id); } }
+        void invalidate() { if (expired) { shell.close(); inspector.clear(); watches.clear(); caseResults.clear(); context = null; SnapshotManager.release(id); RuntimeEvents.release(id); } }
         String id;
     }
     public synchronized String createSession() {
         if (closed || sessions.size() >= 8) throw new IllegalStateException("Session limit reached");
         String id = UUID.randomUUID().toString();
-        Session session = new Session(); session.id = id; RuntimeEvents.register(id); sessions.put(id, session); return id;
+        Session session = new Session(); session.id = id; RuntimeEvents.register(id); ReplNotifications.register(id); sessions.put(id, session); return id;
     }
     public void submit(String sessionId, Runnable task) {
         Session session = required(sessionId);
@@ -60,6 +63,7 @@ public final class ReplHandler implements AutoCloseable {
     public void closeSession(String id) {
         Session session = sessions.remove(id);
         if (session != null) {
+            ReplNotifications.release(id);
             session.closing = true; SnapshotTriggers.release(id); RuntimeEvents.release(id);
             session.interrupt();
             // Cleanup is serialized after any running eval; it never blocks the transport/UI thread.
@@ -70,6 +74,10 @@ public final class ReplHandler implements AutoCloseable {
     }
     public Map<String, Object> handle(String operation, Map<String, String> message) {
         String op = canonical(operation);
+        if(op.equals("notifications/poll")){
+            try{String id=message.getOrDefault("session","");required(id);return done(ReplNotifications.poll(id,Long.parseLong(message.getOrDefault("cursor","0"))));}
+            catch(Exception failure){return error(failure.getMessage());}
+        }
         if (op.equals("audit/events")) {
             try {
                 String id = message.getOrDefault("session", ""); required(id);
@@ -102,6 +110,8 @@ public final class ReplHandler implements AutoCloseable {
         } catch (Exception failure) {
             return error("Operation finished, but its audit completion could not be saved. Effects may have occurred; do not retry automatically.");
         }
+        if(Set.of("eval","class-reload","case/run","case/run-batch","watch/refresh","session/reset","snapshot/edit-copy","case/variants","trace/case-create").contains(op))
+            ReplNotifications.publish(session,"operation.completed",Map.of("operation",op,"status",ReplProtocol.error(result)?"ERROR":"COMPLETED"));
         result = new LinkedHashMap<>(result); result.put("audit-id", audit); return result;
     }
     private Map<String, Object> handleOperation(String operation, Map<String, String> message) {
@@ -154,7 +164,7 @@ public final class ReplHandler implements AutoCloseable {
                     if (op.equals("session/reset")) {
                         session.shell.close(); session.inspector.clear(); SnapshotManager.release(id); RuntimeEvents.release(id); RuntimeEvents.register(id);
                         session.context = current; session.shell = new JShellSession(current);
-                        session.lastEvaluation = null; session.lastCode = ""; session.caseResults.clear();
+                        session.lastEvaluation = null; session.lastCode = ""; session.caseResults.clear(); session.watches.clear();
                         session.expired = false;
                         return done(Map.of("reset", true, "value", "Session reset", "context-ready", current != null, "context-epoch", SpringContextHolder.epoch()));
                     }
@@ -195,11 +205,20 @@ public final class ReplHandler implements AutoCloseable {
                         case "eval", "java-eval" -> {
                             Map<String,String> settings = new LinkedHashMap<>(session.policy.arguments()); settings.putAll(message);
                             String code = message.getOrDefault("code", "");
-                            yield ExecutionPolicy.from(settings).execute(current, session::interrupt, code, () -> {
+                            yield ExecutionPolicy.from(settings).execute(current, session::interrupt, code+"\n"+session.watches.javaSource(), () -> {
                                 session.lastCode = code; session.lastEvaluation = null;
                                 session.lastEvaluation = session.shell.eval(code);
+                                if(!session.lastEvaluation.interrupted())session.watches.sample(session.shell);
                                 return evaluation(session.lastEvaluation);
                             });
+                        }
+                        case "watch/add" -> done(session.watches.add(message.get("expression"),"true".equals(message.get("allow-java"))));
+                        case "watch/list" -> done(session.watches.list());
+                        case "watch/get" -> done(session.watches.get(message.get("watch-id")));
+                        case "watch/remove" -> {session.watches.remove(message.get("watch-id"));yield done(Map.of("value","Watch removed"));}
+                        case "watch/refresh" -> {
+                            Map<String,String> settings=new LinkedHashMap<>(session.policy.arguments());settings.putAll(message);
+                            yield ExecutionPolicy.from(settings).execute(current,session::interrupt,session.watches.javaSource(),()->{session.watches.sample(session.shell);return done(session.watches.list());});
                         }
                         case "reproduction/create" -> done(ReproductionBundle.create(message,session.shell,session.lastEvaluation,session.lastCode));
                         case "reproduction/export-file" -> { ReproductionBundle.exportFile(message.get("name"),java.nio.file.Path.of(message.get("path"))); yield done(Map.of("value","Reproduction bundle exported")); }
@@ -236,12 +255,26 @@ public final class ReplHandler implements AutoCloseable {
                             yield done(Map.of("value","Debugger value imported into "+variable,"var",variable));
                         }
                         case "trace/configure" -> done(TraceRecorder.configure(id,message.get("class"),message.get("method"),Boolean.parseBoolean(message.getOrDefault("enabled","true"))));
-                        case "trace/record" -> done(TraceRecorder.record(id,message.get("classes")));
+                        case "trace/record" -> done(TraceRecorder.record(id,message.get("classes"),"true".equals(message.get("sql")),Integer.parseInt(message.getOrDefault("n-plus-one-threshold","5")),"true".equals(message.get("hibernate")),"true".equals(message.get("capture-data")),"true".equals(message.get("async"))));
+                        case "trace/case-info", "trace/case-create" -> {
+                            ExecutionHistory history=ExecutionHistory.get(id);if(history==null)throw new IllegalArgumentException("No recording in this session");
+                            long call=Long.parseLong(message.get("call-id"));history.call(message.get("recording"),call);
+                            yield done(op.equals("trace/case-info")?history.experiments.info(call):history.experiments.create(call,message.get("name"),message.getOrDefault("bean","")));
+                        }
                         case "trace/list" -> done(TraceRecorder.list(id));
                         case "trace/clear" -> { TraceRecorder.release(id); yield done(Map.of("value","Tracing stopped")); }
                         case "complete" -> done(Map.of("completions", session.shell.complete(message.getOrDefault("code", ""), Integer.parseInt(message.getOrDefault("cursor", "0")))));
                         case "analyze" -> done(session.shell.analyze(message.getOrDefault("code", "")));
                         case "list-beans" -> done(Map.of("value", beans(current)));
+                        case "beans/list" -> done(BeanExplorer.list(current,message.getOrDefault("query",""),Integer.parseInt(message.getOrDefault("offset","0"))));
+                        case "beans/info" -> done(BeanExplorer.info(current,message.get("bean")));
+                        case "beans/prepare" -> done(BeanExplorer.prepare(current,message));
+                        case "beans/compatible-data" -> done(BeanExplorer.compatible(current,message));
+                        case "snapshot/edit-read" -> done(DataCopies.read(message.get("name")));
+                        case "snapshot/edit-validate" -> done(DataCopies.edit(message,false));
+                        case "snapshot/edit-copy" -> done(DataCopies.edit(message,true));
+                        case "case/variants" -> done(DataCopies.variants(message));
+                        case "case/affected" -> done(CaseRegression.affected(message.get("code")));
                         case "snapshot/diff" -> done(SnapshotManager.diff(message.get("before"), message.get("after"),
                                 Integer.parseInt(message.getOrDefault("offset", "0")), Integer.parseInt(message.getOrDefault("limit", "100"))));
                         case "snapshot/list" -> done(Map.of("value", String.join("\n", SnapshotManager.list())));
@@ -321,8 +354,11 @@ public final class ReplHandler implements AutoCloseable {
                             if(rowCount>100)throw new IllegalArgumentException("At most 100 parameter rows per batch");
                             List<Map<String,Object>> results=new ArrayList<>();
                             for(var saved:definitions.entrySet()) {
+                                String baseline="true".equals(saved.getValue().get("disabled"))?"":CaseRegression.identity(saved.getValue(),policy);
                                 Map<String,Object> result=CaseRunner.run(id,saved.getKey(),saved.getValue(),current,policy,deadline,session::interrupt,
                                         ()->session.interruptions.get()!=interruptions||session.expired||session.closing,running->session.caseShell=running);
+                                result=new LinkedHashMap<>(result);result.put("baseline-identity",baseline);
+                                result.put("regression-json",CaseRegression.compare(session.caseResults.get(saved.getKey()),result));
                                 Map<String,Object> cached=new LinkedHashMap<>(CaseRunner.compact(result));
                                 cached.put("rows-json",result.getOrDefault("rows-json","[]"));
                                 session.caseResults.remove(saved.getKey());session.caseResults.put(saved.getKey(),cached);

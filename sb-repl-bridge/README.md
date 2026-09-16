@@ -1,8 +1,8 @@
 # Spring Boot REPL bridge
 
-The optional 0.20.0 bridge exposes a **ready** Spring context to the development agent. Normal startup through the IntelliJ **Enable Spring Boot REPL** checkbox already instruments startup, so the bridge is primarily useful when attaching after the application has started and for application capture/tap calls.
+The optional 0.23.0 bridge exposes a **ready** Spring context to the development agent. Normal startup through the IntelliJ **Enable Spring Boot REPL** checkbox already instruments startup, so the bridge is primarily useful when attaching after the application has started and for application capture/tap calls.
 
-Build the bridge locally using `./gradlew :sb-repl-bridge:jar` or `mvn -f sb-repl-bridge/pom.xml package`. The project version is `hu.baader:sb-repl-bridge:0.20.0`; publication to a remote Maven repository is a separate release step.
+Build the bridge locally using `./gradlew :sb-repl-bridge:jar` or `mvn -f sb-repl-bridge/pom.xml package`. The project version is `hu.baader:sb-repl-bridge:0.23.0`; publication to a remote Maven repository is a separate release step.
 
 `DevRuntimeBridgeConfig` records its own context on `ApplicationReadyEvent`, clears it on `ContextClosedEvent`, and ignores unrelated child contexts. It can remember readiness before an agent is attached. The agent remains the sole owner of `com.baader.devrt.SpringContextHolder`; the bridge contains no duplicate class with that name. Disable the bridge using `sb.repl.bridge.enabled=false`.
 
@@ -33,7 +33,7 @@ Arm the point from **Snapshots → Capture next** in the REPL. Set a snapshot na
 
 There are up to 16 independent session-owned rules per JVM. Multiple saves receive a sequence suffix, or use `${sequence}` in the output name; overlapping active output names are rejected. Pending rules expire after five minutes in the UI and are released on reset, disconnect or context replacement. A capture already claimed can finish. Saving is synchronous: it captures the caller's selected data before that caller continues. Snapshot mix-ins from the arming session are copied before projection begins, and overlapping rules share one supplier invocation. Use stable DTOs; this is not a transaction over concurrent mutations.
 
-Build/install the matching version from this checkout with `mvn -f sb-repl-bridge/pom.xml install -Dgpg.skip=true`, then use `hu.baader:sb-repl-bridge:0.20.0` in the development application. A source checkout or local build does not imply that this version has been published to Maven Central.
+Build/install the matching version from this checkout with `mvn -f sb-repl-bridge/pom.xml install -Dgpg.skip=true`, then use `hu.baader:sb-repl-bridge:0.23.0` in the development application. A source checkout or local build does not imply that this version has been published to Maven Central.
 
 ## Live values
 

@@ -125,7 +125,7 @@ final class SnapshotTriggers {
                 } catch(Exception failure) {
                     synchronized(SnapshotTriggers.class) { c.phase="FAILED"; c.error=Objects.toString(failure.getMessage(),failure.getClass().getName()); if(c.error.length()>1000)c.error=c.error.substring(0,1000); }
                     try { AuditTrail.append(channel,Map.of("session",c.owner,"operation","capture/save","phase","ERROR","request",audit,"name",name,"detail",c.error)); } catch(Exception unavailable) { /* Keep the failure visible in capture status; do not break the application request. */ }
-                } finally { synchronized(SnapshotTriggers.class) { c.millis=(System.nanoTime()-start)/1000000; } }
+                } finally { ReplNotifications.publish(c.owner,"capture.completed",Map.of("ruleId",c.id,"status",c.phase,"saved",c.saved)); synchronized(SnapshotTriggers.class) { c.millis=(System.nanoTime()-start)/1000000; } }
             }
         } finally {
             synchronized(SnapshotTriggers.class) {

@@ -61,6 +61,16 @@ public final class JShellSession implements AutoCloseable {
     }
 
     public synchronized EvalResult eval(String code) { return evaluate(code, true); }
+    /** Explicitly opted-in watch expression; never rotates last1/last2 or the user's result handles. */
+    synchronized Object watchValue(String expression) {
+        var snippets=shell.sourceCodeAnalysis().sourceToSnippets(expression);
+        if(snippets.size()!=1 || !(snippets.get(0) instanceof ExpressionSnippet || snippets.get(0) instanceof VarSnippet v && v.subKind()==Snippet.SubKind.TEMP_VAR_EXPRESSION_SUBKIND))
+            throw new IllegalArgumentException("A Java watch must contain one expression");
+        EvalResult result=evaluate(expression,false);
+        if(!result.error().isEmpty())throw new IllegalArgumentException(result.error());
+        if(!execution.hasResult())throw new IllegalArgumentException("Watch expression did not return a value");
+        return execution.result();
+    }
 
     public synchronized Map<String,Object> symbols(String code) {
         if (closed || code == null || code.length() > 1_000_000) throw new IllegalArgumentException("Symbol analysis accepts at most 1 million characters per cell");

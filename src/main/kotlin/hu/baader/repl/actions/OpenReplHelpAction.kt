@@ -7,3 +7,11 @@ import hu.baader.repl.help.ReplHelp
 class OpenReplHelpAction : DumbAwareAction() {
     override fun actionPerformed(e: AnActionEvent) = ReplHelp.open(e.project)
 }
+
+class OpenEnglishReplHelpAction : DumbAwareAction() {
+    override fun actionPerformed(e: AnActionEvent) = ReplHelp.open(e.project, ReplHelp.Language.ENGLISH)
+}
+
+class OpenHungarianReplHelpAction : DumbAwareAction() {
+    override fun actionPerformed(e: AnActionEvent) = ReplHelp.open(e.project, ReplHelp.Language.HUNGARIAN)
+}

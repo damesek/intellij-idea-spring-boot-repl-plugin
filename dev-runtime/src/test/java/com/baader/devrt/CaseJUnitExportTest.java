@@ -17,8 +17,11 @@ class CaseJUnitExportTest {
     @BeforeEach void setup(){oldHome=System.getProperty("user.home");System.setProperty("user.home",home.toString());SnapshotManager.save("input",1);SnapshotManager.save("expected",1);}
     @AfterEach void cleanup(){System.setProperty("user.home",oldHome);}
     Map<String,String> definition(){return new HashMap<>(Map.of("input","input","expected","expected","type","java.lang.Integer","code","ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class).update(\"insert into entries values (?)\", input);","result-expression","ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class).queryForObject(\"select count(*) from entries\", Integer.class)","parameters-json","[{\"id\":\"one\",\"input\":\"input\",\"expected\":\"expected\"},{\"id\":\"two\",\"input\":\"input\",\"expected\":\"expected\"}]"));}
-    @Test void exportedTestsCompileAndRunWithRealJUnitSpringRollbackAndAssertionsWithoutTheAgent() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void exportedTestsCompileAndRunWithRealJUnitSpringRollbackAndAssertionsWithoutTheAgent(boolean sql) throws Exception {
         var saved=definition();saved.put("type","int");saved.put("assertions-json","{\"numericTolerance\":{\"\":0.01}}");
+        if(sql) { saved.put("max-sql-count","2");saved.put("max-sql-repetitions","1"); }
         SnapshotManager.saveCase("exported",SnapshotCases.definition(saved));
         var files=CaseJUnitExport.files("exported","com.baader.devrt.exportfixture","GeneratedCaseTest",Map.of("execution-mode","ROLLBACK"));
         Path classes=home.resolve("classes");Files.createDirectory(classes);List<String> sources=new ArrayList<>();
@@ -36,6 +39,11 @@ class CaseJUnitExportTest {
         try(URLClassLoader loader=new URLClassLoader(new URL[]{classes.toUri().toURL()},getClass().getClassLoader())) {
             Thread.currentThread().setContextClassLoader(loader);
             Class<?> test=loader.loadClass("com.baader.devrt.exportfixture.GeneratedCaseTest");
+            if(sql) {
+                String counter=files.get("src/test/java/com/baader/devrt/exportfixture/GeneratedCaseTestSqlCounter.java");
+                assertNotNull(counter);assertTrue(files.get("src/test/java/com/baader/devrt/exportfixture/GeneratedCaseTest.java").contains("sqlMeasurement.assertLimits(2L, 1L)"));
+                assertFalse(counter.contains("com.baader.devrt.CaseSqlCounter"));
+            }
             var summary=run(test);assertEquals(2,summary.getTestsSucceededCount(),summary.getFailures().toString());
             // A wrong expected resource must fail the generated test (not just compile successfully).
             Files.writeString(classes.resolve("sbrepl/com/baader/devrt/exportfixture/GeneratedCaseTest/1-expected.json"),"99");

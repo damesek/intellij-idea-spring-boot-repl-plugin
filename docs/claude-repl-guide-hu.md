@@ -1,12 +1,12 @@
 # Spring Boot REPL használata Claude-dal
 
-Ez az útmutató a **0.20.0** verzióhoz készült, 2026. szeptember 15-én. A plugin egy futó Spring Boot alkalmazásban értékel ki Java-kódot. Claude MCP-n keresztül ugyanennek az alkalmazásnak a beanjeivel, objektumaival és snapshotjaival dolgozhat.
+Ez az útmutató a **0.23.0** verzióhoz készült, 2026. szeptember 16-án. A plugin egy futó Spring Boot alkalmazásban értékel ki Java-kódot. Claude MCP-n keresztül ugyanennek az alkalmazásnak a beanjeivel, objektumaival és snapshotjaival dolgozhat.
 
 **Gyors kezdés:** indítsd az alkalmazást bekapcsolt REPL-lel, nyomd meg a **Start MCP** gombot, add hozzá a kapcsolatot Claude Code-hoz, majd add át neki a [Claude munkautasítását](claude-repl-instructions.md).
 
 ## 1. Az alkalmazás és a REPL indítása
 
-1. Telepítsd a `build/distributions/sb-repl-0.20.0.zip` csomagot az IDEA **Settings → Plugins → Install Plugin from Disk** menüjében. Frissítés után indítsd újra az IDE-t. A támogatott IDE-k és az ellenőrzések a [verifikációs jelentésben](../IDEA_2025_2_0_13_1.md) szerepelnek.
+1. Telepítsd a `build/distributions/sb-repl-0.23.0.zip` csomagot az IDEA **Settings → Plugins → Install Plugin from Disk** menüjében. Frissítés után indítsd újra az IDE-t és a célalkalmazást is, hogy az új agent fusson. A támogatott IDE-k és az ellenőrzések a [verifikációs jelentésben](../WORKFLOWS_0_23.md) szerepelnek.
 2. A szokásos **Spring Boot** Run Configurationben kapcsold be az **Enable Spring Boot REPL** opciót. A saját alkalmazásod main classát és beállításait használd.
 3. A profilokat a **Spring Boot → Active profiles** mezőben add meg, például `dev,llm-openai`. Sima **Application** konfigurációnál a programargumentum legyen `--spring.profiles.active=dev,llm-openai`. Az önmagában beírt `dev,llm-openai` nem aktivál profilokat.
 4. Indítsd el az alkalmazást, majd nyisd meg a **Spring Boot REPL** tool window-t. Várd meg a **READY** állapotot.
@@ -31,7 +31,7 @@ A `ctx` a futó alkalmazás Spring contextje. A checkboxos indításhoz az agent
 | Kijelölt forrás futtatása | **Run Selection**, regisztrált alapbillentyű **Ctrl+Shift+R** |
 | Objektum és JSON megtekintése | **Value → Tree / Formatted / Raw**, részletesen **Inspector** |
 | Kódfrissítés | **Reload Class**, regisztrált macOS billentyű **Cmd+Shift+R** |
-| Beépített útmutató | **Code → Spring Boot REPL → Help (PDF)** |
+| Beépített útmutató | **Code → Spring Boot REPL → Help (PDF) → Magyar / English**; mindkettő offline |
 
 A keymap felülírhatja a billentyűket; az IDEA **Settings → Keymap** alatt a művelet nevére keress. Az **Evaluate at Caret** a REPL-sessionben fut: egy metódus lokális változói ettől még nem lesznek elérhetők. Felfüggesztett stack frame vizsgálatához a **Debugger** lapot használd, vagy készíts snapshotot a szükséges értékről.
 
@@ -168,11 +168,11 @@ Majd az alkalmazásod fejlesztési konfigurációjához add hozzá; a forrásfor
 <dependency>
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-bridge</artifactId>
-    <version>0.20.0</version>
+    <version>0.23.0</version>
 </dependency>
 ```
 
-Ez a helyi build telepítése; nem feltételezünk hozzá Maven Centralon publikált `0.20.0` verziót. További részletek: [bridge](../sb-repl-bridge/README.md).
+Ez a helyi build telepítése; nem feltételezünk hozzá Maven Centralon publikált `0.23.0` verziót. További részletek: [bridge](../sb-repl-bridge/README.md).
 
 A feldolgozó metódusban, ahol az érték már rendelkezésre áll:
 
@@ -249,7 +249,7 @@ Ehhez az alkalmazásban `SnapshotHelper.tap("cv-input", inputDto)` hívás kell.
 | Spring context megváltozott vagy bezárult | `repl_status`, majd az új contexthez `repl_reset`; a korábbi Java-változók és LIVE pinjeik elvesznek. |
 | IDE-változó nem található Claude-ban | Mentsd DATA-ként, majd töltsd be Claude saját sessionjébe. |
 | Eszköz, például `repl_eval` vagy `repl_reload` hiányzik | Ellenőrizd a plugin indításkor rögzített jogosultságait, majd a kliens eszközlistáját. |
-| Böngészőben `GET /mcp` → 405 | A plugin nem weboldal és nem SSE-végpont. MCP-kliens HTTP POST kérésekkel használja. |
+| `GET /mcp` nem működik | SSE-hez bearer token, inicializált session és `Accept: text/event-stream` kell. Ez nem nyilvános weboldal. |
 | `Session busy` | Egy sessionben sorban végezd a hívásokat. Folyó futtatás mellett megszakítás kérhető. |
 | Lejárt vagy megszakadt session | Kapcsolódj újra, kérj állapotot, majd DATA-ból állítsd vissza a szükséges értékeket. |
 | Timeout egy üzleti művelet után | Az eredmény bizonytalan lehet. Vizsgáld meg az alkalmazás tényleges állapotát; ne ismételd meg automatikusan ugyanazt a műveletet. |
@@ -263,7 +263,7 @@ Legfeljebb 4 MCP-session lehet nyitva; 30 perc inaktivitás után lejárnak. **S
 
 A működést és a paramétereket a [MCP-eszközök](../src/main/kotlin/hu/baader/repl/mcp/McpTools.kt), a [panel](../src/main/kotlin/hu/baader/repl/mcp/McpPanel.kt), a [router](../src/main/kotlin/hu/baader/repl/mcp/McpRouter.kt), a [capture runtime](../dev-runtime/src/main/java/com/baader/devrt/SnapshotTriggers.java) és a [bridge](../sb-repl-bridge/src/main/java/com/baader/sbrepl/bridge/SnapshotHelper.java) kódjához igazítottuk.
 
-A 0.20-as eszközreferencia 60 eszközt tartalmaz. A kiadás tényleges build- és regressziós ellenőrzéseit a [kiadási jelentés](../MCP_RECORDINGS_0_20.md) rögzíti. A tesztek elkülönített Spring/H2-környezetben futnak; ez nem a felhasználó üzleti alkalmazásának vagy a külső Claude-kliensnek teljes körű tesztje.
+A 0.23-as eszközreferencia 82 eszközt tartalmaz. A kiadás tényleges build- és regressziós ellenőrzéseit a [kiadási jelentés](../WORKFLOWS_0_23.md) rögzíti. A tesztek elkülönített Spring/H2-környezetben futnak; ez nem a felhasználó üzleti alkalmazásának vagy a külső Claude-kliensnek teljes körű tesztje.
 
 ## 0.14: javasolt kezdő beállítás
 
@@ -316,8 +316,11 @@ Minden itt felsorolt eszközhöz szükséges az **MCP > Share IDE recordings wit
 | repl_recording_pin | **recording**, **call**, `view`; egy letöltött hívás rögzítése a kliens saját összehasonlítási referenciájaként. |
 | repl_recording_compare | **recording**, **after**, valamint **egy**: `before` / `reference`; opcionális `view`, `offset`, `limit`. Mezőszintű eltérések és részlegesség. |
 | repl_recording_select | **recording**, **call**; a node kijelölése az IDE-ben, forrás és rögzített értékek megnyitása. Állapotmódosítási engedély kell. |
-| repl_recording_start | **expected**, **classes**; az aktuális felvétel azonosítója vagy none, 1-8 különböző pontos osztálynév új sorral elválasztva. Capture/trace és állapotmódosítási engedély is kell. |
+| repl_recording_start | **expected**, **classes**; `sql` (sztring true/false, alapból true), `n-plus-one-threshold` (2-1000, alapból 5); az aktuális felvétel azonosítója vagy none, 1-8 különböző pontos osztálynév új sorral elválasztva. Capture/trace és állapotmódosítási engedély is kell. |
 | repl_recording_stop | **recording**; az adott megosztott felvétel leállítása. Capture/trace és állapotmódosítási engedély is kell. |
+| repl_recording_sql | **recording**; `view`, `root`, `call` (teljes híváság), `sql-id`, `offset`, `limit`, `text-offset`, `text-limit`. JDBC-események és SQL-szöveg lapozva; szülő/root, idő, datasource, forrás és hibafajta. |
+| repl_recording_findings | **recording**; `view`, `root`, `offset`, `limit`. Kérésenkénti N+1-gyanús SELECT-csoportok, darabszám, idő és példaazonosítók. |
+| repl_recording_sql_compare | **recording**, **after** és pontosan egy: `before` / `reference`; opcionális `view`. Két híváság SQL-statisztikája és eltérése. |
 
 Az alábbi szabályok a felvételi eszközökre vonatkoznak:
 
@@ -349,3 +352,46 @@ Példa eszközhívásokra, ahol a helykitöltőket a korábbi válasz azonosít�
 ```
 
 A példában a 3-as hívásszám is helykitöltő: a híváslistából válassz létező azonosítót. Javítás és új felvétel után a pin válaszának `reference` értékével hasonlítsd össze az új hívást. Ez forrásmódosítást, HotSwapot és üzleti újrafuttatást nem végez magától.
+
+
+## SQL és N+1 (0.21)
+
+A Recorded calls most szinkron Spring MVC/JDBC/JPA megfigyeléseket is ad. A pontos eszközargumentumok a fenti referenciában szerepelnek; a PDF 41. fejezete a gombokat és a teljes munkafolyamatot mutatja be.
+
+1. `repl_recording_status`: ellenőrizd `sqlEnabled`, `sqlAvailable`, `sqlPartial` és az aktuális azonosítókat.
+2. `repl_recording_findings(recording, view, root?)`: kérésenkénti N+1-gyanúk, darabszám, idő és hívási hely. Ismétlődés alapján csak gyanút állíts, ne bizonyosságot.
+3. `repl_recording_sql(recording, view, root?, call?, sql-id?, offset?, limit?, text-offset?, text-limit?)`: SQL-események, szülő/root, datasource, forrás, hibafajta. Az SQL-szöveg alapból 512, legfeljebb 2048 karakteres oldalakra bontva érhető el. Kövesd a nextOffset és nextTextOffset mezőket.
+4. `repl_recording_pin(recording, call)`: a befejezett híváság SQL-statisztikáját is rögzíti a kliensnek. Javítás és új felvétel után `repl_recording_sql_compare(recording, reference, after)`; vagy ugyanazon felvételben before/after. A két referenciaformából pontosan egyet adj meg.
+5. CASE mentésekor `max-sql-count` és `max-sql-repetitions` egész szám lehet, 0-1000000 között. Ezek a Code + Result expression JDBC-műveleteit korlátozzák. A JUnit-export is megőrzi őket a mellékelt DataSource helperrel.
+
+A kapcsolatszerzés ideje külön szerepel. A batch egy végrehajtásnak számít; ResultSet-sorokat és paraméterértékeket a megfigyelő nem olvas. A SQL-literalokat eltávolítja; ez nem általános anonimizálás. `partial`, `pending` vagy `dropped` esetén a számok nem igazolják az összes végrehajtás felső korlátját. SQL-változás is érvényteleníti a korábbi view-t.
+
+Új felvétel indításánál `sql="true"` az alapértelmezés; `n-plus-one-threshold=5`, állítható 2-1000 között. Start/stop továbbra is megosztott IDE-állapotot módosít, tehát külön execution és capture/trace engedély szükséges. Olvasás nem használja a Java-evaluatort.
+
+Szinkron útvonalakon a kiválasztott Java-osztályok és a tényleges JDBC-hívások figyelhetők meg; a rendszer nem talál ki kihagyott metódusokat. Async/Reactor/R2DBC és DB-belső tervek/lockok nincsenek ebben a felvételben. Az exportált SQL-teszt minden JDBC-hozzáférésének Spring-managed DataSource-on keresztül kell mennie; natív unwrap vagy közvetlen DriverManager adaptálást igényel.
+
+## Hibernate-vizsgálat Claude-dal (0.22)
+
+A **Recorded calls > New recording...** ablakban a JDBC/SQL mellett a **Record Hibernate 6.6 entity / session events** opciót is kapcsold be. Felvétel után válaszd a kérés Root-ját, és nyisd meg a **Hibernate** fület. A **Findings** szűrő a lazy/SELECT ismétlődéseket és a válaszírás közbeni lazy betöltéseket mutatja; egy eseményhez a session, entity/kapcsolat, forráshely és SQL-ek is elérhetők.
+
+Claude a három új `repl_recording_hibernate*` eszközzel ugyanazt a rögzített adatot olvassa és hasonlítja össze. Példafeladat: „Vizsgáld meg az aktuális felvétel Hibernate-eseményeit. Mely kapcsolat lazy betöltése okoz ismételt SELECT-et, és történt-e ilyen a JSON-válasz készítésekor? Pineld a kérés híváságát, majd a javítás utáni felvétellel hasonlítsd össze az ORM- és SQL-számlálókat.”
+
+Ehhez **Share IDE recordings with MCP** szükséges. Az olvasás nem futtat új üzleti kódot. A cache-találat és az entity-load külön fogalom; a részleges napló nem bizonyítja az N+1 megszűnését. Az adapter Hibernate 6.6.29.Final és szinkron session/MVC/JDBC útvonalakkal ellenőrzött. A részletek a kézikönyv 42. fejezetében és az agent-instrukciók Hibernate szakaszában találhatók.
+
+A CASE Options négy új entity/flush/lazy/response-lazy korlátja JUnit-exportban is megmarad. Az ORM-assertionökhöz a csomagban lévő agentet a teszt JVM-jéhez kell adni; kizárólag SQL-korlátos exporthoz továbbra sem szükséges agent. Az Inspector megmutatja a betöltetlenséget, és nem hív lazy gettert a háttérben.
+
+## 0.23: felvételből reprodukció, élő vizsgálat és események
+
+A [kézikönyv 43–49. fejezete](repl-help-hu.md#recorded-case) mind a hét új munkafolyamatot bemutatja, UI-gombokkal és korlátokkal. Az MCP-katalógus 82 eszközt tartalmaz.
+
+1. A `repl_recording_start` hívásban a `capture-data="true"` teljes bemenet/eredmény rögzítést, az `async="true"` támogatott Executor/@Async/CompletableFuture szálváltásokat kér. Mindkettő külön bekapcsolandó MCP-n. A full DATA szerializálókat futtathat, és csak az élő runtime-felvételben marad meg.
+2. Egy befejezett hívásra `repl_recording_case_info`, majd a visszaadott beanjelölttel `repl_recording_case_create` új input/expected DATA-t és CASE-t készít. Ez nem hívja újra a metódust. Külön execution, snapshot-write és recording-sharing engedély kell. A CASE későbbi futtatásához CASE-run engedély is szükséges.
+3. `repl_snapshot_edit_read` adja a JSON-t, típust és verziót. `repl_snapshot_edit_validate` típusosan ellenőriz; `repl_snapshot_edit_copy` új néven ment. Csonkolt vagy kitakart JSON-t ne ments teljes adatként. `repl_case_variants` több inputból sorokat készít, kezdetben az eredeti expected értékkel; ezt soronként nézd át.
+4. `repl_bean_search`, `repl_bean_info`, `repl_bean_compatible_data`, `repl_bean_prepare` felderíti a bean/metódus/DATA kapcsolatot anélkül, hogy meghívná a beant. A visszaadott Java-kódot ellenőrizd, majd külön futtasd. `repl_watch_add/list/get/remove/refresh` saját session-watchokat kezel; Java-metóduskifejezéshez `allow-java="true"` kell.
+5. Módosított forrásra `repl_case_affected` ad javaslatot. Nézd át a találatokat és az ismeretlen lefedettséget; explicit `repl_reload`, majd sikeres csere után `repl_case_run_batch`. A `regression-json` a session előző összehasonlítható eredményéhez mutat eltéréseket. Hiányos számláló UNKNOWN, nem nulla.
+
+Eseményekhez az MCP-kliens feliratkozhat a **repl://session/events** resource-ra. Az autentikált GET SSE-folyam változásértesítést ad; utána a resource-ból olvasható a capture, context, futtatás és felvétel metaadata. A plugin másodpercenként kér belső metaadatot, így Claude-nak nem kell sűrűn eszközöket pollolnia. Eseményhiánynál olvassa újra az állapotot. A folyam kódot és objektumértéket nem sugároz.
+
+MCP 2025-11-25 kompatibilis host opcionálisan taskként is indíthat eval/CASE/reload/watch-refresh műveletet. A host `tasks/get`, `tasks/result`, `tasks/cancel` és `notifications/tasks/status` segítségével kezeli az azonosítót. Ezek protokollműveletek, nem új `repl_*` eszközök; ne találj ki hozzájuk toolnevet. Az agentkliens tényleges támogatása döntő. Enélkül a szokásos szinkron eszközhívás működik.
+
+A task megszakítása együttműködő, nem undo. A még futó evaluator foglalt marad; bizonytalan hálózati kimenet után ne ismételd meg a műveletet. Az async flow csak felvételazonosítót kapcsol össze: nem viszi át a szülő tranzakcióját, security/tenant/MDC értékeit, így a szülő rollbackje nem garantál munkaszál-rollbacket.

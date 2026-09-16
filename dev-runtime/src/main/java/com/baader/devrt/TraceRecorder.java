@@ -11,6 +11,44 @@ public final class TraceRecorder {
                         Map<String,ExecutionHistory.Ticket> recordings) {}
     private static final Map<String,Set<Rule>> RULES=new ConcurrentHashMap<>();
     private static final ThreadLocal<Call> FRAME=new ThreadLocal<>();
+    private static final ThreadLocal<Http> HTTP=new ThreadLocal<>();
+    private static final class Http {
+        boolean responsePhase;
+        final Object request; final long start=System.nanoTime();
+        final Map<String,ExecutionHistory.Ticket> tickets=new LinkedHashMap<>();
+        Http(Object request) { this.request=request; }
+    }
+    public static Object httpEnter(Object request) {
+        if(WATCHES.isEmpty() && SqlRecorder.caseLog()==null || HTTP.get()!=null) return null;
+        Http http=new Http(request); HTTP.set(http); return http;
+    }
+    public static void httpExit(Object token,Throwable error) {
+        if(!(token instanceof Http http)) return;
+        HTTP.remove();
+        http.tickets.values().forEach(t -> t.history().exit(t,System.nanoTime()-http.start,null,error,-1));
+    }
+    public static void responseStarted() { Http http=HTTP.get();if(http!=null)http.responsePhase=true; }
+    static boolean responsePhase() { Http http=HTTP.get();return http!=null&&http.responsePhase; }
+    static Collection<ExecutionHistory.Ticket> currentRecordings() {
+        if(CallExperiments.capturing())return List.of();
+        Map<String,ExecutionHistory.Ticket> result=new LinkedHashMap<>();
+        for(Call c=FRAME.get(); c!=null; c=c.parent()) c.recordings().forEach(result::putIfAbsent);
+        Http http=HTTP.get(); if(http!=null) http.tickets.forEach(result::putIfAbsent);
+        AsyncRecorder.current().forEach(t->result.putIfAbsent(t.history().owner,t));
+        return result.values();
+    }
+    private static long httpParent(String owner,ExecutionHistory history) {
+        Http http=HTTP.get(); if(http==null || !history.sql.enabled()) return 0;
+        ExecutionHistory.Ticket existing=http.tickets.get(owner);
+        if(existing!=null && existing.history()==history) return existing.id();
+        String label="HTTP request";
+        try {
+            Class<?> api=Class.forName("jakarta.servlet.http.HttpServletRequest",false,http.request.getClass().getClassLoader());
+            label=api.getMethod("getMethod").invoke(http.request)+" "+api.getMethod("getRequestURI").invoke(http.request);
+        } catch(ReflectiveOperationException ignored) { }
+        ExecutionHistory.Ticket ticket=history.enter(0,"http.Request","dispatch","(Ljava/lang/String;)V","request",new Object[]{label});
+        if(ticket!=null) { http.tickets.put(owner,ticket); return ticket.id(); } return 0;
+    }
     private static final Map<String,Set<Class<?>>> WATCHES=new ConcurrentHashMap<>();
     private static final ClassValue<Map<String,String>> PARAMETERS=new ClassValue<>() {
         @Override protected Map<String,String> computeValue(Class<?> type) {
@@ -59,7 +97,7 @@ public final class TraceRecorder {
         return Map.of("value",String.join("\n",RULES.getOrDefault(owner,Set.of()).stream().map(r -> r.type().getName()+"\t"+r.method()).sorted().toList()));
     }
     static synchronized void release(String owner) {
-        stopRecording(owner); ExecutionHistory.release(owner);
+        stopRecording(owner); ExecutionHistory.release(owner); AsyncRecorder.prune();
         Set<Rule> removed=RULES.remove(owner);
         if(removed!=null) for(Class<?> type:removed.stream().map(Rule::type).distinct().toList()) CLEANUP.execute(() -> {
             synchronized(TraceRecorder.class) {
@@ -74,6 +112,21 @@ public final class TraceRecorder {
         return names;
     }
     static synchronized Map<String,Object> record(String owner,String classes) throws Exception {
+        return record(owner,classes,false,5);
+    }
+    static synchronized Map<String,Object> record(String owner,String classes,boolean sql,int threshold) throws Exception {
+        return record(owner,classes,sql,threshold,false);
+    }
+    static synchronized Map<String,Object> record(String owner,String classes,boolean sql,int threshold,boolean hibernate) throws Exception {
+        return record(owner,classes,sql,threshold,hibernate,false);
+    }
+    static synchronized Map<String,Object> record(String owner,String classes,boolean sql,int threshold,boolean hibernate,boolean captureData) throws Exception {
+        return record(owner,classes,sql,threshold,hibernate,captureData,false);
+    }
+    static synchronized Map<String,Object> record(String owner,String classes,boolean sql,int threshold,boolean hibernate,boolean captureData,boolean async) throws Exception {
+        if(async&&!AsyncRecorder.available())throw new IllegalStateException("Async recording is unavailable; restart with the current agent or disable async capture");
+        if(hibernate&&!sql)throw new IllegalArgumentException("Hibernate recording requires SQL recording");
+        if(threshold<2 || threshold>1000) throw new IllegalArgumentException("N+1 threshold must be 2–1000");
         RuntimeEvents.requireSession(owner);
         ExecutionHistory old=ExecutionHistory.get(owner);
         if(old!=null && old.recording()) throw new IllegalStateException("Stop the current recording before starting another");
@@ -98,7 +151,8 @@ public final class TraceRecorder {
         WATCHES.put(owner,Set.copyOf(types));
         try {
             for(Class<?> type:changed) Agent.configureTrace(type,methods(type));
-            ExecutionHistory.begin(owner);
+            ExecutionHistory.begin(owner,sql,threshold,hibernate,captureData,async);
+            if(async)AsyncRecorder.enabled(true);
         } catch(Exception failure) {
             WATCHES.put(owner,previous);
             for(Class<?> type:changed) try { Agent.configureTrace(type,methods(type)); } catch(Exception restore) { failure.addSuppressed(restore); }
@@ -115,6 +169,7 @@ public final class TraceRecorder {
     }
     static Map<String,Object> history(String owner) {
         RuntimeEvents.requireSession(owner);
+        AsyncRecorder.prune();
         ExecutionHistory history=ExecutionHistory.get(owner);
         Map<String,Object> result=new LinkedHashMap<>(history==null ? Map.of("recording","","value","","active",false) : history.list());
         result.put("classes",String.join("\n",WATCHES.getOrDefault(owner,Set.of()).stream().map(Class::getName).sorted().toList()));
@@ -127,6 +182,7 @@ public final class TraceRecorder {
     }
     public static Object enter(Class<?> type,String method,Object[] args) { return enter(type,method,"",args); }
     public static Object enter(Class<?> type,String method,String descriptor,Object[] args) {
+        if(CallExperiments.capturing())return null;
         Rule rule=new Rule(type,method);
         List<String> owners=RULES.entrySet().stream().filter(e -> e.getValue().contains(rule)).map(Map.Entry::getKey).toList();
         Map<String,ExecutionHistory> histories=new LinkedHashMap<>();
@@ -142,8 +198,10 @@ public final class TraceRecorder {
                 ExecutionHistory.Ticket candidate=frame.recordings().get(entry.getKey());
                 if(candidate!=null && candidate.history()==entry.getValue()) { parentId=candidate.id(); break; }
             }
+            if(parentId==0)for(var boundary:AsyncRecorder.current())if(boundary.history()==entry.getValue()){parentId=boundary.id();break;}
+            if(parentId==0) parentId=httpParent(entry.getKey(),entry.getValue());
             ExecutionHistory.Ticket ticket=entry.getValue().enter(parentId,type.getName(),method,descriptor,names,args);
-            if(ticket!=null) tickets.put(entry.getKey(),ticket);
+            if(ticket!=null) {tickets.put(entry.getKey(),ticket);entry.getValue().experiments.enter(ticket,type,method,descriptor,args);}
         }
         if(owners.isEmpty() && tickets.isEmpty()) return null;
         Call call=new Call(rule,owners,System.nanoTime(),depth,Arrays.copyOf(args,Math.min(args.length,32)),Thread.currentThread().getName(),parent,tickets);
@@ -161,7 +219,7 @@ public final class TraceRecorder {
             boolean traced=RULES.getOrDefault(owner,Set.of()).contains(call.rule());
             ExecutionHistory.Ticket recorded=call.recordings().get(owner);
             long event=traced || recorded!=null && ExecutionHistory.get(owner)==recorded.history() ? RuntimeEvents.trace(owner,call.rule().type().getName()+"."+call.rule().method(),nanos,data) : -1;
-            if(recorded!=null) recorded.history().exit(recorded,nanos,result,error,event);
+            if(recorded!=null) {recorded.history().exit(recorded,nanos,result,error,event);recorded.history().experiments.exit(recorded,result,error);}
         }
     }
 }

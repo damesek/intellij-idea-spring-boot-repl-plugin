@@ -69,3 +69,6 @@ replay_pid*
 /sandbox/
 # IDE SDK descriptors extracted during local classloader diagnostics
 /META-INF/
+
+# Generated PDF layout and review renders
+/tmp/pdfs/
