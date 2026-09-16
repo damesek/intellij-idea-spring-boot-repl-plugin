@@ -1,5 +1,7 @@
 # Spring Boot REPL
 
+An IntelliJ workflow that turns live Spring Boot behavior into reusable snapshots, repeatable checks, and JUnit tests — accessible to developers and AI agents through MCP.
+
 Evaluate Java inside your running Spring Boot application from IntelliJ IDEA. Inspect real bean results, capture a failing input, reproduce it in a workbook, update supported method bodies with HotSwap, and turn the result into a CASE or JUnit test.
 
 **Current version: 0.23.0 · IntelliJ IDEA through 2025.2.x · Java 17/21 tested · 82 MCP tools**
