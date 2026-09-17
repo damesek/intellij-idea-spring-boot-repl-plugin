@@ -44,7 +44,7 @@ object ReplHelp {
             } catch (failure: Exception) {
                 ApplicationManager.getApplication().invokeLater {
                     if (project?.isDisposed != true)
-                        Messages.showErrorDialog(project, "Could not open the bundled PDF guide: ${failure.message}", "Spring Boot REPL Help")
+                        Messages.showErrorDialog(project, "Could not open the bundled PDF guide: ${failure.message}", "Spring Boot Debug REPL and MCP Help")
                 }
             }
         }

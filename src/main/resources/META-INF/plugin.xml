@@ -1,10 +1,11 @@
 <idea-plugin>
     <id>hu.baader.java-over-nrepl</id>
-    <name>Spring Boot REPL</name>
+    <name>Spring Boot Debug REPL and MCP</name>
+    <resource-bundle>messages.ReplBundle</resource-bundle>
     <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
     
     <description><![CDATA[
-      <b>Spring Boot REPL</b><br/>
+      <b>Spring Boot Debug REPL and MCP</b><br/>
       Enable the REPL in your existing Spring Boot or Java Application run configuration.
       Keep its profiles, environment and program arguments. The bundled agent connects through a private local endpoint.<br/>
       A single Java/JShell session preserves imports and definitions, exposes the ready Spring context as <code>ctx</code>,
@@ -33,14 +34,15 @@
         <applicationConfigurable
                 instance="hu.baader.repl.settings.PluginSettingsConfigurable"
                 id="hu.baader.repl.settings"
-                displayName="Spring Boot REPL"/>
+                displayName="Spring Boot Debug REPL and MCP"/>
 
         <!-- Project startup -->
         <postStartupActivity implementation="hu.baader.repl.nrepl.ProjectStartup"/>
 
         <!-- Notification Group -->
         <notificationGroup id="Spring Boot REPL"
-                           displayType="BALLOON"/>
+                           displayType="BALLOON"
+                           bundle="messages.ReplBundle" key="plugin.name"/>
 
         <!-- Run Configuration Type (dedicated REPL run config) -->
         <configurationType implementation="hu.baader.repl.runner.SpringBootReplConfigurationType"/>
@@ -50,9 +52,9 @@
     </extensions>
     
     <actions>
-        <!-- Spring Boot REPL group in Code menu + editor popup -->
+        <!-- Spring Boot Debug REPL and MCP group in Code menu + editor popup -->
         <group id="hu.baader.repl.SpringReplGroup"
-               text="Spring Boot REPL"
+               text="Spring Boot Debug REPL and MCP"
                popup="true">
             <add-to-group group-id="CodeMenu" anchor="last"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>

@@ -27,6 +27,18 @@ class CaseRunnerTest {
     Map<String,Object> request(String op,Map<String,String> fields){var message=new HashMap<>(fields);message.put("session",session);return handler.handle(op,message);}
     Map<String,Object> ok(String op,Map<String,String> fields){var result=request(op,fields);assertFalse(ReplProtocol.error(result),result.toString());return result;}
     Map<String,String> definition(){return new HashMap<>(Map.of("name","case","input","input","expected","expected","type","java.lang.Integer","code","1","parameters-json","[{\"id\":\"a\",\"input\":\"input\",\"expected\":\"expected\"},{\"id\":\"b\",\"input\":\"input\",\"expected\":\"expected\"}]"));}
+    @Test void rejectedCaseEditPreservesTheLastResultAndSavedDefinition() {
+        var saved = definition();
+        ok("case/save", saved);
+        var before = ok("case/run", Map.of("name", "case"));
+        saved.put("assertions-json", "{\"typo\":true}");
+        assertTrue(ReplProtocol.error(request("case/save", saved)));
+        assertEquals(before.get("run-id"), ok("case/result", Map.of("name", "case")).get("run-id"));
+        assertFalse(ok("case/load", Map.of("name", "case")).toString().contains("typo"));
+        saved.remove("assertions-json");
+        ok("case/save", saved);
+        assertTrue(ReplProtocol.error(request("case/result", Map.of("name", "case"))));
+    }
     @Test void eachParameterHasItsOwnRollbackBoundaryAndResultsAreSessionScoped(){
         var saved=definition();saved.put("code","var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class); jdbc.update(\"insert into entries values (?)\", input);");saved.put("result-expression","jdbc.queryForObject(\"select count(*) from entries\", Integer.class)");
         ok("case/save",saved);var result=ok("case/run",Map.of("name","case","execution-mode","ROLLBACK"));

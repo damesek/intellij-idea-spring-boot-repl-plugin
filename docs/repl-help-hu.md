@@ -1,4 +1,4 @@
-# Spring Boot REPL {#start}
+# Spring Boot Debug REPL and MCP {#start}
 
 **Részletes felhasználói kézikönyv - {{version}}**
 
@@ -10,9 +10,9 @@ Fülek, gombok, mezők és munkafolyamatok az IntelliJ IDEA pluginhoz. Java-kís
 
 **A kézikönyv alapja:** a {{version}} forrásában ténylegesen bekötött 12 fő fül, az alfüleik, gombjaik és beállításaik. A gombfeliratokat eredeti formában adjuk meg. Az IDEA témája, keymapje és ablakmérete módosíthatja az elhelyezést. A felépítési ábra szemléltetés, nem élő képernyőkép.
 
-**Dokumentum frissítése:** 2026. szeptember 16. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is. Az angol kiadás ugyanezt a funkciókört mutatja be.
+**Dokumentum frissítése:** 2026. szeptember 17. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is. Az angol kiadás ugyanezt a funkciókört mutatja be.
 
-**Elérési út az IDE-ben:** Code > Spring Boot REPL > Help (PDF) > Magyar vagy English. A Java-forrás helyi menüje ugyanezt kínálja. A Java REPL > Tools > Help (PDF) nyelvválasztót nyit. Mindkét kézikönyv a plugin része, offline is elérhető.
+**Elérési út az IDE-ben:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > Magyar vagy English. A Java-forrás helyi menüje ugyanezt kínálja. A Java REPL > Tools > Help (PDF) nyelvválasztót nyit. Mindkét kézikönyv a plugin része, offline is elérhető.
 
 {{cover-summary}}
 
@@ -27,7 +27,7 @@ A fejezetcímekre kattintva közvetlenül a megfelelő oldalra léphetsz. A PDF-
 **Cél:** a saját Spring Boot alkalmazásod sikeresen felálljon, és a REPL-ben használható legyen a `ctx`.
 
 1. Telepítsd a `build/distributions/sb-repl-{{version}}.zip` csomagot: Settings > Plugins > Install Plugin from Disk. Pluginfrissítés után indítsd újra az IDEA-t.
-2. Nyisd meg a szokásos Spring Boot Run Configurationt. Pipáld be az **Enable Spring Boot REPL** opciót; a normál konfiguráció main classát, környezetét és VM-paramétereit használd.
+2. Nyisd meg a szokásos Spring Boot Run Configurationt. Pipáld be az **Enable Spring Boot Debug REPL and MCP** opciót; a normál konfiguráció main classát, környezetét és VM-paramétereit használd.
 3. Spring Boot konfigurációnál az **Active profiles** mezőbe például `dev,llm-openai` kerül. Sima Application konfigurációnál ezt a programargumentumot használd:
 
 ```text
@@ -35,7 +35,7 @@ A fejezetcímekre kattintva közvetlenül a megfelelő oldalra léphetsz. A PDF-
 ```
 
 4. Indítsd az alkalmazást **Run** vagy **Debug** módban. A debuggerfunkciókhoz Debug kell; a sima REPL-hez Run is elég.
-5. Nyisd meg a **Spring Boot REPL** tool window-t, és várd meg a **READY** állapotot. A Java REPL fülön futtasd:
+5. Nyisd meg a **Spring Boot Debug REPL and MCP** tool window-t, és várd meg a **READY** állapotot. A Java REPL fülön futtasd:
 
 ```java
 ctx.getBeanDefinitionCount()
@@ -50,7 +50,7 @@ ctx.getBeanDefinitionCount()
 | Normál Spring Boot + REPL-checkbox | Ajánlott napi használat; megtartja a Spring profil- és környezeti beállításait. |
 | Application + REPL-checkbox | Java-main indítása; a Spring-profilokat argumentummal vagy környezettel adod meg. |
 | Tools > Attach & Inject Dev Runtime | Már futó, általad kiválasztott JVM-hez csatlakozás. Késői attach esetén a bridge segíthet a context megtalálásában. |
-| Régi, külön Spring Boot REPL konfiguráció | Kompatibilitás miatt megmaradt; új beállításnál a normál konfigurációt válaszd. |
+| Régi, külön Spring Boot Debug REPL and MCP konfiguráció | Kompatibilitás miatt megmaradt; új beállításnál a normál konfigurációt válaszd. |
 
 A checkboxos indítás a plugin beépített agentjét használja; nem kell külön alkalmazásfüggőség. Alkalmazáskódba írt `SnapshotHelper` hívásokhoz viszont kell a bridge. A puszta `dev,llm-openai` argumentum nem aktivál profilokat. Az nREPL elindulása után bekövetkező Spring-konfigurációs hibát az alkalmazásban kell kijavítani.
 
@@ -376,7 +376,7 @@ Ehhez a bridge-függőség kell. Az agent hiánya vagy a feliratkozók hiánya e
 
 ## Trace használata kódmódosítás nélkül
 
-Állj a normál Java-forrásban egy metódusra: **Code > Spring Boot REPL > Trace Method**. Ez a fül Class/Method mezőivel is elvégezhető. A követésben argumentum, visszatérési érték, kivétel, szál és időtartam válhat vizsgálhatóvá.
+Állj a normál Java-forrásban egy metódusra: **Code > Spring Boot Debug REPL and MCP > Trace Method**. Ez a fül Class/Method mezőivel is elvégezhető. A követésben argumentum, visszatérési érték, kivétel, szál és időtartam válhat vizsgálhatóvá.
 
 Sessionönként legfeljebb **128 eseményérték**, **öt percig** marad meg. A `dropped` számláló kihagyott eseményeket jelezhet; ez nem teljes auditnapló. A fontos értéket az Inspectorból mentsd DATA-ként, majd a szükségtelen megfigyelést állítsd le.
 
@@ -579,7 +579,7 @@ Az Add Import / Edit Import ablakban Alias, Fully qualified name és Enabled mez
 
 **Alkalmazás:** Java REPL > Apply configured imports. Az Imports táblázat átírása önmagában nem távolítja el a már futó session importjait. Új bejegyzés létrehozásakor a jelenlegi kód bekapcsolt állapottal ment; szükség esetén utána az On oszlopban kapcsold ki.
 
-## Settings / Preferences > Spring Boot REPL
+## Settings / Preferences > Spring Boot Debug REPL and MCP
 
 | Mező / kapcsoló | Mire való? |
 | --- | --- |
@@ -759,12 +759,12 @@ Az alábbiak a pluginban regisztrált alapértékek. A keymap és az operációs
 
 Meta macOS-en Cmd. Evaluate at Caret és Reload Class esetén a plugin nem regisztrál külön Ctrl-alapú Windows/Linux változatot. A **Settings / Preferences > Keymap** alatt keress a művelet nevére, és rendelj hozzá szabad kombinációt.
 
-## Code > Spring Boot REPL és a Java helyi menüje
+## Code > Spring Boot Debug REPL and MCP és a Java helyi menüje
 
 | Menüpont | Mit indít? |
 | --- | --- |
 | Run Selection / Evaluate at Caret | Kiértékelés a REPL-sessionben; nem a metódus lokális környezetében. |
-| Advanced Editor | Előhozza a Spring Boot REPL ablakot; a munkafüzethez válaszd a Java REPL fület. |
+| Advanced Editor | Előhozza a Spring Boot Debug REPL and MCP ablakot; a munkafüzethez válaszd a Java REPL fület. |
 | Sync Imports | A Java-forrás importjainak átvitele a sessionbe. |
 | Trace Method | Az aktuális metódus követése. |
 | Record Class Calls… | Osztályhívások rögzítése: gráf, forrás melletti bemenet és eredmény. Részletek a 39. fejezetben. |
@@ -773,7 +773,7 @@ Meta macOS-en Cmd. Evaluate at Caret és Reload Class esetén a plugin nem regis
 
 Az IDEA **Tools** menüjében külön szerepel **Attach & Inject Dev Runtime** és **Bind Spring Context**. A 42 workbench-parancshoz saját gyorsbillentyű rendelhető; új alapértelmezett globális kombinációt nem foglalnak le. A Help (PDF) művelethez is adhatsz saját billentyűt.
 
-**További workbench-parancsok:** a Run, Workspace, Session és Tools menü műveleteire az IDEA Find Action keresőjében `REPL:` névvel kereshetsz, és a Settings > Keymap felületen saját kombinációt állíthatsz be. A forrásbeli **Snapshot point…** a Java-editor helyi menüjében, a margó helyi menüjében és a Code > Spring Boot REPL menüben is megjelenik.
+**További workbench-parancsok:** a Run, Workspace, Session és Tools menü műveleteire az IDEA Find Action keresőjében `REPL:` névvel kereshetsz, és a Settings > Keymap felületen saját kombinációt állíthatsz be. A forrásbeli **Snapshot point…** a Java-editor helyi menüjében, a margó helyi menüjében és a Code > Spring Boot Debug REPL and MCP menüben is megjelenik.
 
 # 25. MCP-eszközreferencia Claude-nak {#mcp-tools}
 
@@ -921,7 +921,7 @@ A csonkolás és részleges vizsgálat jelzését mindig vedd figyelembe. Egy nu
 
 A kézikönyv a repository `src/main/kotlin/hu/baader/repl/ui`, `ai`, `mcp`, `settings` és `runner` kódjára, a menüregisztrációra és a runtime műveleteire épül. A nem bekötött régi paneleket nem sorolja aktív funkcióként.
 
-Szerkeszthető forrás: `docs/repl-help-hu.md` és `docs/repl-help-en.md`; a `scripts/build-help-pdf.py` alapból mindkét PDF-et újraépíti. A Claude-nak átadható részletes eszközleírás: `docs/claude-repl-instructions.md`. A kliensbeállítások bővebben: `docs/claude-repl-guide-hu.md`. A 0.22 ellenőrzése: `HIBERNATE_0_22.md`; SQL-felvételek: `SQL_RECORDINGS_0_21.md`; korábbi IDE-kompatibilitás: `IDEA_2025_2_0_13_1.md`.
+Szerkeszthető forrás: `docs/repl-help-hu.md` és `docs/repl-help-en.md`; a `scripts/build-help-pdf.py` alapból mindkét PDF-et újraépíti. A Claude-nak átadható részletes eszközleírás: `docs/claude-repl-instructions.md`. A kliensbeállítások bővebben: `docs/claude-repl-guide-hu.md`. A 0.22 ellenőrzése: `docs/history/HIBERNATE_0_22.md`; SQL-felvételek: `docs/history/SQL_RECORDINGS_0_21.md`; korábbi IDE-kompatibilitás: `docs/history/IDEA_2025_2_0_13_1.md`.
 
 A Help (PDF) a pluginba csomagolt példányt nyitja meg. Az új kézikönyv a friss csomag telepítésével kerül az IDE-be; önállóan ebből a PDF-ből is használható. A felület működését a forrás alapján ellenőriztük; ez nem jelenti minden üzleti alkalmazás vagy Claude-kliens teljes körű tesztelését.
 
@@ -1184,11 +1184,11 @@ Claude új eszközei: **repl_snapshot_versions**, **repl_snapshot_provenance**, 
 
 # 38. Snapshotpont egérrel a Java-forrásban {#snapshot-point}
 
-**Cél:** az alkalmazás következő hívásakor egy kiválasztott sor előtt menteni a helyi változót DATA-ként, alkalmazáskódba írt helperhívás nélkül. A pont az IDEA Java-debuggeréhez tartozik; **Debug + Enable Spring Boot REPL** szükséges.
+**Cél:** az alkalmazás következő hívásakor egy kiválasztott sor előtt menteni a helyi változót DATA-ként, alkalmazáskódba írt helperhívás nélkül. A pont az IDEA Java-debuggeréhez tartozik; **Debug + Enable Spring Boot Debug REPL and MCP** szükséges.
 
 1. Indítsd a szokásos Spring Boot konfigurációt Debug módban, bekapcsolt REPL-checkboxszal.
 2. Válassz olyan végrehajtható Java-sort, amely előtt a mentendő változó már inicializálva van. Például az `order` létrehozását követő sort.
-3. Jelöld ki az `order` kifejezést, majd jobb kattintás > Spring Boot REPL > **Snapshot point…**. A bal margó helyi menüjéből is indítható; ilyenkor ellenőrizd a kifejezést.
+3. Jelöld ki az `order` kifejezést, majd jobb kattintás > Spring Boot Debug REPL and MCP > **Snapshot point…**. A bal margó helyi menüjéből is indítható; ilyenkor ellenőrizd a kifejezést.
 4. Add meg a snapshot nevét, például `order-input`. A **Java expression** a kiválasztott sor lokális környezetében értékelődik ki. A Java-típus opcionális; generikus listánál megadható a teljes típus. A **Capture attempts** alapból 1, maximum 100.
 5. Mentés után lila snapshotjel látszik a margón. Válts az alkalmazásra, és indítsd el a vizsgált kérést.
 6. A debugger a sor végrehajtása előtt rögzíti az értéket, majd folytatja az alkalmazást. A Debug konzolba siker vagy hiba kerül. A mentést a **Snapshots > Saved** fülön találod; innen töltsd be a REPL-be.
@@ -1209,12 +1209,12 @@ A pillanatfelvétel a találat szálán készül. A debugger rövid időre felf�
 
 # 39. Rögzített hívásfa és értékek a forrás mellett {#recorded-calls}
 
-**Cél:** a futó alkalmazás egy kiválasztott Java-osztályában látni, melyik metódus milyen bemenettel és eredménnyel futott le. A gráf egy korábbi node-ját kiválasztva megnyílik az osztály forrása a rögzített értékekkel. Ehhez **Run + Enable Spring Boot REPL** is elég; debugger nem szükséges.
+**Cél:** a futó alkalmazás egy kiválasztott Java-osztályában látni, melyik metódus milyen bemenettel és eredménnyel futott le. A gráf egy korábbi node-ját kiválasztva megnyílik az osztály forrása a rögzített értékekkel. Ehhez **Run + Enable Spring Boot Debug REPL and MCP** is elég; debugger nem szükséges.
 
 ## Első felvétel
 
 1. Indítsd a Spring Boot alkalmazást a REPL-checkboxszal, és várd meg a kapcsolódást.
-2. Nyisd meg a vizsgálandó Java-osztályt. Jobb kattintás > Spring Boot REPL > **Record Class Calls…**. A Code menüből és a Find Action keresőből is elérhető.
+2. Nyisd meg a vizsgálandó Java-osztályt. Jobb kattintás > Spring Boot Debug REPL and MCP > **Record Class Calls…**. A Code menüből és a Find Action keresőből is elérhető.
 3. A párbeszédablak előre kitölti az osztály teljes nevét. Megadhatsz további osztályokat, soronként egyet, összesen legfeljebb nyolcat. Csak a megadott osztályok deklarált, konkrét metódusai kerülnek a felvételbe.
 4. Indítsd el a rögzítést, majd használd az alkalmazást: például küldd el a vizsgált HTTP-kérést. A felvétel a tényleges hívásokat figyeli, nem indítja el helyetted az üzleti műveletet.
 5. Nyisd meg a **Tap / Trace > Recorded calls** alfület. A gráf node-jain látszik a hívásszám, az osztály/metódus, a siker vagy hiba, az időtartam, a rövid eredmény és a szál.

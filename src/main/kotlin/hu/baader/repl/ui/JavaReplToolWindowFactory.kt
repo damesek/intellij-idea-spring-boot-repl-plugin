@@ -36,6 +36,12 @@ import java.nio.file.Files
 import javax.swing.*
 
 class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
+    override fun init(toolWindow: ToolWindow) {
+        // Keep the registered ID stable: only the visible product name changes.
+        toolWindow.stripeTitle = "Spring Boot Debug REPL and MCP"
+        toolWindow.title = "Spring Boot Debug REPL and MCP"
+    }
+
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val service = NreplService.getInstance(project)
         val editor = JavaReplEditorProvider.createEnhancedEditor(project)

@@ -1,15 +1,15 @@
-# Spring Boot REPL használata Claude-dal
+# Spring Boot Debug REPL and MCP használata Claude-dal
 
-Ez az útmutató a **0.23.0** verzióhoz készült, 2026. szeptember 16-án. A plugin egy futó Spring Boot alkalmazásban értékel ki Java-kódot. Claude MCP-n keresztül ugyanennek az alkalmazásnak a beanjeivel, objektumaival és snapshotjaival dolgozhat.
+Ez az útmutató a **0.24.0** verzióhoz készült, 2026. szeptember 17-én. A plugin egy futó Spring Boot alkalmazásban értékel ki Java-kódot. Claude MCP-n keresztül ugyanennek az alkalmazásnak a beanjeivel, objektumaival és snapshotjaival dolgozhat.
 
 **Gyors kezdés:** indítsd az alkalmazást bekapcsolt REPL-lel, nyomd meg a **Start MCP** gombot, add hozzá a kapcsolatot Claude Code-hoz, majd add át neki a [Claude munkautasítását](claude-repl-instructions.md).
 
 ## 1. Az alkalmazás és a REPL indítása
 
-1. Telepítsd a `build/distributions/sb-repl-0.23.0.zip` csomagot az IDEA **Settings → Plugins → Install Plugin from Disk** menüjében. Frissítés után indítsd újra az IDE-t és a célalkalmazást is, hogy az új agent fusson. A támogatott IDE-k és az ellenőrzések a [verifikációs jelentésben](../WORKFLOWS_0_23.md) szerepelnek.
-2. A szokásos **Spring Boot** Run Configurationben kapcsold be az **Enable Spring Boot REPL** opciót. A saját alkalmazásod main classát és beállításait használd.
+1. Telepítsd a `build/distributions/sb-repl-0.24.0.zip` csomagot az IDEA **Settings → Plugins → Install Plugin from Disk** menüjében. Frissítés után indítsd újra az IDE-t és a célalkalmazást is, hogy az új agent fusson. A támogatott IDE-k és az ellenőrzések a [ellenőrzési útmutatóban](engineering.md) szerepelnek.
+2. A szokásos **Spring Boot** Run Configurationben kapcsold be az **Enable Spring Boot Debug REPL and MCP** opciót. A saját alkalmazásod main classát és beállításait használd.
 3. A profilokat a **Spring Boot → Active profiles** mezőben add meg, például `dev,llm-openai`. Sima **Application** konfigurációnál a programargumentum legyen `--spring.profiles.active=dev,llm-openai`. Az önmagában beírt `dev,llm-openai` nem aktivál profilokat.
-4. Indítsd el az alkalmazást, majd nyisd meg a **Spring Boot REPL** tool window-t. Várd meg a **READY** állapotot.
+4. Indítsd el az alkalmazást, majd nyisd meg a **Spring Boot Debug REPL and MCP** tool window-t. Várd meg a **READY** állapotot.
 5. A Java REPL munkafüzetben futtasd ezt **Cmd+Enter / Ctrl+Enter** segítségével:
 
 ```java
@@ -31,13 +31,13 @@ A `ctx` a futó alkalmazás Spring contextje. A checkboxos indításhoz az agent
 | Kijelölt forrás futtatása | **Run Selection**, regisztrált alapbillentyű **Ctrl+Shift+R** |
 | Objektum és JSON megtekintése | **Value → Tree / Formatted / Raw**, részletesen **Inspector** |
 | Kódfrissítés | **Reload Class**, regisztrált macOS billentyű **Cmd+Shift+R** |
-| Beépített útmutató | **Code → Spring Boot REPL → Help (PDF) → Magyar / English**; mindkettő offline |
+| Beépített útmutató | **Code → Spring Boot Debug REPL and MCP → Help (PDF) → Magyar / English**; mindkettő offline |
 
 A keymap felülírhatja a billentyűket; az IDEA **Settings → Keymap** alatt a művelet nevére keress. Az **Evaluate at Caret** a REPL-sessionben fut: egy metódus lokális változói ettől még nem lesznek elérhetők. Felfüggesztett stack frame vizsgálatához a **Debugger** lapot használd, vagy készíts snapshotot a szükséges értékről.
 
 ## 2. MCP bekapcsolása a pluginban
 
-1. Nyisd meg a **Spring Boot REPL → MCP** lapot; a munkafüzet **MCP** gombja is ide vezet.
+1. Nyisd meg a **Spring Boot Debug REPL and MCP → MCP** lapot; a munkafüzet **MCP** gombja is ide vezet.
 2. A **Port (0 = free)** mező maradhat `0`, vagy válassz egy szabad állandó portot.
 3. A **Allow Java execution / state changes** legyen bekapcsolva, ha Claude kódot futtathat, objektumot böngészhet vagy snapshotot menthet. Alapból ki van kapcsolva. A snapshot/CASE-írás, törlés, CASE-futtatás és capture külön kapcsolót is igényel; a Choose allowed tools tovább szűkítheti a listát.
 4. A **Allow HotSwap** csak akkor szükséges, ha Claude a futó JVM kódját is frissítheti. Alapból ki van kapcsolva.
@@ -130,7 +130,7 @@ Add át a **[claude-repl-instructions.md](claude-repl-instructions.md)** fájlt.
 
 Első kérésnek ezt másolhatod be:
 
-> Olvasd el a mellékelt Spring Boot REPL munkautasítást. A spring-boot-repl MCP-szerveren kérd le az állapotot, majd a beanek első 50 sorát. Ellenőrizd a `ctx.getBeanDefinitionCount()` kódot futtatás nélkül, és ha a context kész és az elemzés hibamentes, értékeld ki. Írd le a tényleges eredményt.
+> Olvasd el a mellékelt Spring Boot Debug REPL and MCP munkautasítást. A spring-boot-repl MCP-szerveren kérd le az állapotot, majd a beanek első 50 sorát. Ellenőrizd a `ctx.getBeanDefinitionCount()` kódot futtatás nélkül, és ha a context kész és az elemzés hibamentes, értékeld ki. Írd le a tényleges eredményt.
 
 Claude a `repl_status → repl_list_beans → repl_analyze → repl_eval` eszközökkel végzi el ezt. A konkrét JSON-paraméterek a [munkautasításban](claude-repl-instructions.md) szerepelnek.
 
@@ -168,11 +168,11 @@ Majd az alkalmazásod fejlesztési konfigurációjához add hozzá; a forrásfor
 <dependency>
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-bridge</artifactId>
-    <version>0.23.0</version>
+    <version>0.24.0</version>
 </dependency>
 ```
 
-Ez a helyi build telepítése; nem feltételezünk hozzá Maven Centralon publikált `0.23.0` verziót. További részletek: [bridge](../sb-repl-bridge/README.md).
+Ez a helyi build telepítése; nem feltételezünk hozzá Maven Centralon publikált `0.24.0` verziót. További részletek: [bridge](../sb-repl-bridge/README.md).
 
 A feldolgozó metódusban, ahol az érték már rendelkezésre áll:
 
@@ -263,7 +263,7 @@ Legfeljebb 4 MCP-session lehet nyitva; 30 perc inaktivitás után lejárnak. **S
 
 A működést és a paramétereket a [MCP-eszközök](../src/main/kotlin/hu/baader/repl/mcp/McpTools.kt), a [panel](../src/main/kotlin/hu/baader/repl/mcp/McpPanel.kt), a [router](../src/main/kotlin/hu/baader/repl/mcp/McpRouter.kt), a [capture runtime](../dev-runtime/src/main/java/com/baader/devrt/SnapshotTriggers.java) és a [bridge](../sb-repl-bridge/src/main/java/com/baader/sbrepl/bridge/SnapshotHelper.java) kódjához igazítottuk.
 
-A 0.23-as eszközreferencia 82 eszközt tartalmaz. A kiadás tényleges build- és regressziós ellenőrzéseit a [kiadási jelentés](../WORKFLOWS_0_23.md) rögzíti. A tesztek elkülönített Spring/H2-környezetben futnak; ez nem a felhasználó üzleti alkalmazásának vagy a külső Claude-kliensnek teljes körű tesztje.
+A 0.23-as eszközreferencia 82 eszközt tartalmaz. A kiadás tényleges build- és regressziós ellenőrzéseit a [kiadási jelentés](history/WORKFLOWS_0_23.md) rögzíti. A tesztek elkülönített Spring/H2-környezetben futnak; ez nem a felhasználó üzleti alkalmazásának vagy a külső Claude-kliensnek teljes körű tesztje.
 
 ## 0.14: javasolt kezdő beállítás
 

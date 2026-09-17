@@ -1,4 +1,4 @@
-# Spring Boot REPL {#start}
+# Spring Boot Debug REPL and MCP {#start}
 
 **Detailed user manual - {{version}}**
 
@@ -10,9 +10,9 @@ Tabs, buttons, fields and workflows for the IntelliJ IDEA plugin. Experiment wit
 
 **Scope:** the 12 main tabs, subtabs, buttons and settings wired into the {{version}} source. Labels match the plugin's English UI. IDEA themes, keymaps and window sizes may change their placement. The layout diagram is a schematic, not a live screenshot.
 
-**Updated:** September 16, 2026. This full English edition covers the same features as the Hungarian manual, including Claude/MCP setup and the SQL/Hibernate recording tools.
+**Updated:** September 17, 2026. This full English edition covers the same features as the Hungarian manual, including Claude/MCP setup and the SQL/Hibernate recording tools.
 
-**In the IDE:** Code > Spring Boot REPL > Help (PDF) > English or Magyar. The Java editor context menu offers the same choices. Java REPL > Tools > Help (PDF) opens a language picker. Both manuals are bundled and work offline.
+**In the IDE:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > English or Magyar. The Java editor context menu offers the same choices. Java REPL > Tools > Help (PDF) opens a language picker. Both manuals are bundled and work offline.
 
 {{cover-summary}}
 
@@ -27,7 +27,7 @@ Click a chapter title to jump to its page. The PDF reader's bookmarks show the s
 **Goal:** start your Spring Boot application successfully and make `ctx` available in the REPL.
 
 1. Install `build/distributions/sb-repl-{{version}}.zip` through Settings > Plugins > Install Plugin from Disk. Restart IDEA after updating the plugin.
-2. Open your usual Spring Boot Run Configuration. Select **Enable Spring Boot REPL**, keeping the normal configuration's main class, environment and VM options.
+2. Open your usual Spring Boot Run Configuration. Select **Enable Spring Boot Debug REPL and MCP**, keeping the normal configuration's main class, environment and VM options.
 3. For a Spring Boot configuration, enter profiles such as `dev,llm-openai` in **Active profiles**. For a plain Application configuration, use this program argument:
 
 ```text
@@ -35,7 +35,7 @@ Click a chapter title to jump to its page. The PDF reader's bookmarks show the s
 ```
 
 4. Start the application with **Run** or **Debug**. Debugger features require Debug; ordinary REPL use works with Run.
-5. Open the **Spring Boot REPL** tool window and wait for **READY**. In Java REPL, run:
+5. Open the **Spring Boot Debug REPL and MCP** tool window and wait for **READY**. In Java REPL, run:
 
 ```java
 ctx.getBeanDefinitionCount()
@@ -50,7 +50,7 @@ ctx.getBeanDefinitionCount()
 | Normal Spring Boot + REPL checkbox | Recommended for everyday work; retains Spring profiles and environment settings. |
 | Application + REPL checkbox | Launch a Java main class; supply Spring profiles through arguments or the environment. |
 | Tools > Attach & Inject Dev Runtime | Attach to an already running JVM you select. The bridge can help discover the context after late attachment. |
-| Legacy separate Spring Boot REPL configuration | Retained for compatibility; prefer a normal configuration for new setups. |
+| Legacy separate Spring Boot Debug REPL and MCP configuration | Retained for compatibility; prefer a normal configuration for new setups. |
 
 The checkbox uses the plugin's bundled agent; no separate application dependency is required. Calls to `SnapshotHelper` in application source do require the bridge. A bare `dev,llm-openai` argument does not activate profiles. A Spring configuration error after nREPL has started must still be fixed in the application.
 
@@ -375,7 +375,7 @@ The bridge dependency is required. Without the agent or subscribers nothing is s
 
 ## Trace without changing source
 
-Place the cursor on a method in normal Java source and choose **Code > Spring Boot REPL > Trace Method**, or use Class/Method on this tab. Arguments, return values, exceptions, threads and duration can be examined.
+Place the cursor on a method in normal Java source and choose **Code > Spring Boot Debug REPL and MCP > Trace Method**, or use Class/Method on this tab. Arguments, return values, exceptions, threads and duration can be examined.
 
 A session retains up to **128 event values** for **five minutes**. The `dropped` counter may indicate missing events; this is not a complete audit log. Save important values as DATA through Inspector and stop observation when no longer needed.
 
@@ -576,7 +576,7 @@ Add Import / Edit Import contains Alias, Fully qualified name and Enabled. Alias
 
 **Apply with:** Java REPL > Apply configured imports. Editing this table does not remove imports already applied to a live session. The current implementation saves newly created entries as enabled; turn them off in On afterward if needed.
 
-## Settings / Preferences > Spring Boot REPL
+## Settings / Preferences > Spring Boot Debug REPL and MCP
 
 | Field / control | Purpose |
 | --- | --- |
@@ -756,12 +756,12 @@ These are the plugin's registered defaults. Keymaps and the operating system can
 
 Meta means Cmd on macOS. Evaluate at Caret and Reload Class have no separately registered Ctrl-based Windows/Linux default. Search the action in **Settings / Preferences > Keymap** and assign an available shortcut.
 
-## Code > Spring Boot REPL and the Java context menu
+## Code > Spring Boot Debug REPL and MCP and the Java context menu
 
 | Menu item | Action |
 | --- | --- |
 | Run Selection / Evaluate at Caret | Evaluate in the REPL session, not a method's local frame. |
-| Advanced Editor | Show Spring Boot REPL; choose Java REPL for the workbook. |
+| Advanced Editor | Show Spring Boot Debug REPL and MCP; choose Java REPL for the workbook. |
 | Sync Imports | Transfer Java source imports to the session. |
 | Trace Method | Trace the current method. |
 | Record Class Calls… | Record class calls with a graph and source-side input/results; see chapter 39. |
@@ -770,7 +770,7 @@ Meta means Cmd on macOS. Evaluate at Caret and Reload Class have no separately r
 
 IDEA's **Tools** menu also contains **Attach & Inject Dev Runtime** and **Bind Spring Context**. Assign shortcuts to the 42 workbench commands; they reserve no new global default combinations. You can assign Help (PDF) a shortcut too; it opens the language picker.
 
-**Other workbench commands:** search IDEA Find Action for `REPL:` to find Run, Workspace, Session and Tools actions, and assign shortcuts in Keymap. **Snapshot point…** also appears in the Java editor context menu, gutter context menu and Code > Spring Boot REPL.
+**Other workbench commands:** search IDEA Find Action for `REPL:` to find Run, Workspace, Session and Tools actions, and assign shortcuts in Keymap. **Snapshot point…** also appears in the Java editor context menu, gutter context menu and Code > Spring Boot Debug REPL and MCP.
 
 # 25. MCP tool reference for Claude {#mcp-tools}
 
@@ -918,7 +918,7 @@ Always account for truncation and partial checks. A partial comparison with zero
 
 This guide follows the repository's `src/main/kotlin/hu/baader/repl/ui`, `ai`, `mcp`, `settings` and `runner` code, menu registration and runtime operations. Unwired legacy panels are not presented as active features.
 
-Editable sources: `docs/repl-help-en.md` and `docs/repl-help-hu.md`. Generator `scripts/build-help-pdf.py` builds both by default. Additional Hungarian Claude instructions: `docs/claude-repl-instructions.md`; setup: `docs/claude-repl-guide-hu.md`. Version 0.22 validation: `HIBERNATE_0_22.md`; SQL recordings: `SQL_RECORDINGS_0_21.md`; earlier IDE compatibility: `IDEA_2025_2_0_13_1.md`.
+Editable sources: `docs/repl-help-en.md` and `docs/repl-help-hu.md`. Generator `scripts/build-help-pdf.py` builds both by default. Additional Hungarian Claude instructions: `docs/claude-repl-instructions.md`; setup: `docs/claude-repl-guide-hu.md`. Version 0.22 validation: `docs/history/HIBERNATE_0_22.md`; SQL recordings: `docs/history/SQL_RECORDINGS_0_21.md`; earlier IDE compatibility: `docs/history/IDEA_2025_2_0_13_1.md`.
 
 Help (PDF) opens the bundled copy. Install the updated plugin to update its manuals, or use these PDFs independently. UI behavior was checked against source; this does not constitute exhaustive testing of every business application or Claude client.
 
@@ -1179,11 +1179,11 @@ Claude tools: **repl_snapshot_versions**, **repl_snapshot_provenance**, **repl_s
 
 # 38. Snapshot points in Java source {#snapshot-point}
 
-**Goal:** save a local variable as DATA before a selected source line executes on a subsequent application call, without adding a helper call to application code. This uses IDEA's Java debugger; **Debug + Enable Spring Boot REPL** is required.
+**Goal:** save a local variable as DATA before a selected source line executes on a subsequent application call, without adding a helper call to application code. This uses IDEA's Java debugger; **Debug + Enable Spring Boot Debug REPL and MCP** is required.
 
 1. Start the normal Spring Boot configuration in Debug with the REPL checkbox enabled.
 2. Choose an executable Java line before which the target variable is already initialized, for example the line after creating `order`.
-3. Select expression `order`, then right-click > Spring Boot REPL > **Snapshot point…**. The gutter context menu also offers it; verify the expression there.
+3. Select expression `order`, then right-click > Spring Boot Debug REPL and MCP > **Snapshot point…**. The gutter context menu also offers it; verify the expression there.
 4. Enter a snapshot name such as `order-input`. **Java expression** is evaluated in that line's local frame. Java type is optional; provide the full generic type for a list if needed. **Capture attempts** defaults to 1, maximum 100.
 5. Save to place a purple snapshot marker in the gutter, then trigger the application request.
 6. Before the line executes, the debugger records the value and resumes the application. The Debug console reports success/failure. Find the snapshot in **Snapshots > Saved** and load it into the REPL.
@@ -1204,12 +1204,12 @@ Capture runs on the hit thread. The debugger briefly suspends it for evaluation/
 
 # 39. Recorded call trees and source-side values {#recorded-calls}
 
-**Goal:** see which methods ran with which inputs and results in selected Java classes. Selecting an earlier graph node opens its class source with recorded values. **Run + Enable Spring Boot REPL** is sufficient; no debugger is required.
+**Goal:** see which methods ran with which inputs and results in selected Java classes. Selecting an earlier graph node opens its class source with recorded values. **Run + Enable Spring Boot Debug REPL and MCP** is sufficient; no debugger is required.
 
 ## Make a first recording
 
 1. Launch Spring Boot with the REPL checkbox and wait for the connection.
-2. Open the Java class. Right-click > Spring Boot REPL > **Record Class Calls…**, also available from Code and Find Action.
+2. Open the Java class. Right-click > Spring Boot Debug REPL and MCP > **Record Class Calls…**, also available from Code and Find Action.
 3. The dialog fills the full class name. Add more names, one per line, up to eight classes total. Only declared concrete methods in those classes are recorded.
 4. Start recording, then use the application, for example by sending the HTTP request under investigation. Recording observes real calls; it does not trigger the business operation for you.
 5. Open **Tap / Trace > Recorded calls**. Nodes show call number, class/method, success/error, duration, a short result and thread.

@@ -47,6 +47,9 @@ ehthumbs.db
 
 # Linux
 *~
+*.versionsBackup
+*.orig
+*.rej
 
 # Package Files
 *.jar

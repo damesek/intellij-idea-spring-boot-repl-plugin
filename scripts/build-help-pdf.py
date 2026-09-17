@@ -192,7 +192,7 @@ def frame(canvas, doc):
     canvas.setFillColor(ACCENT)
     canvas.rect(48, A4[1] - 31, 24, 3, fill=1, stroke=0)
     canvas.setFont("GuideBold", 8.5)
-    canvas.drawString(80, A4[1] - 31, "SPRING BOOT REPL")
+    canvas.drawString(80, A4[1] - 31, "SPRING BOOT DEBUG REPL AND MCP")
     canvas.setFillColor(MUTED)
     canvas.setFont("Guide", 8.2)
     canvas.drawRightString(A4[0] - 48, A4[1] - 31, localized("FELHASZNÁLÓI KÉZIKÖNYV  /  HU", "USER MANUAL  /  EN"))
@@ -286,7 +286,7 @@ while i < len(lines):
 args.output.parent.mkdir(parents=True, exist_ok=True)
 # SimpleDocTemplate's frame adds 6 pt of horizontal padding; align text/tables with the 48 pt header margin.
 document = GuideDoc(str(args.output), pagesize=A4, leftMargin=42, rightMargin=42, topMargin=55, bottomMargin=49,
-                    title=f"Spring Boot REPL {version} - " + localized("használati útmutató", "user guide"), author="Spring Boot REPL", subject=localized("Funkciók, gyorsbillentyűk, snapshotok és debugger", "Features, shortcuts, snapshots and debugger"), lang=args.language, pageCompression=1)
+                    title=f"Spring Boot Debug REPL and MCP {version} - " + localized("használati útmutató", "user guide"), author="Spring Boot Debug REPL and MCP", subject=localized("Funkciók, gyorsbillentyűk, snapshotok és debugger", "Features, shortcuts, snapshots and debugger"), lang=args.language, pageCompression=1)
 document.multiBuild(story, onFirstPage=frame, onLaterPages=frame)
 for title, page in document.section_pages: print(f"{page}: {title}")
 assert len(document.section_pages) == len(titles), "A guide section was not rendered"

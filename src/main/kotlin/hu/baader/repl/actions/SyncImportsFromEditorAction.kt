@@ -43,7 +43,7 @@ class SyncImportsFromEditorAction : AnAction("Sync Imports") {
                 onResult = {
                     notify(
                         project,
-                        "Synced ${imports.size} imports to Spring Boot REPL",
+                        "Synced ${imports.size} imports to Spring Boot Debug REPL and MCP",
                         NotificationType.INFORMATION
                     )
                 },

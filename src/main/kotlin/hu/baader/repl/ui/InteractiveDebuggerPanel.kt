@@ -20,7 +20,7 @@ class InteractiveDebuggerPanel(private val project: Project, private val service
     private val source = JTextArea(5, 70)
     private val variable = JTextField("debugValue", 16)
     private val output = JTextArea().apply { isEditable = false; lineWrap = true }
-    private val status = JLabel("Start the application in Debug mode with Enable Spring Boot REPL checked.")
+    private val status = JLabel("Start the application in Debug mode with Enable Spring Boot Debug REPL and MCP checked.")
     private var session: XDebugSession? = null
     private var pending: DebugTransfer? = null
     private var captureInFlight: DebugTransfer? = null
@@ -78,7 +78,7 @@ class InteractiveDebuggerPanel(private val project: Project, private val service
             generation++; pending = null; captureInFlight = null; evaluating = false; claiming = false
         }
         status.text = when {
-            current == null || current.isStopped -> "Start the application in Debug mode with Enable Spring Boot REPL checked."
+            current == null || current.isStopped -> "Start the application in Debug mode with Enable Spring Boot Debug REPL and MCP checked."
             current.isSuspended -> "Paused: ${current.sessionName} · selected frame · ${if (pending != null) "value captured; Resume to import" else "evaluate or capture an expression"}"
             else -> "Running: ${current.sessionName}"
         }

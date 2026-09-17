@@ -1,8 +1,8 @@
-# Spring Boot REPL bridge
+# Spring Boot Debug REPL and MCP bridge
 
-The optional 0.23.0 bridge exposes a **ready** Spring context to the development agent. Normal startup through the IntelliJ **Enable Spring Boot REPL** checkbox already instruments startup, so the bridge is primarily useful when attaching after the application has started and for application capture/tap calls.
+The optional 0.24.0 bridge exposes a **ready** Spring context to the development agent. Normal startup through the IntelliJ **Enable Spring Boot Debug REPL and MCP** checkbox already instruments startup, so the bridge is primarily useful when attaching after the application has started and for application capture/tap calls.
 
-Build the bridge locally using `./gradlew :sb-repl-bridge:jar` or `mvn -f sb-repl-bridge/pom.xml package`. The project version is `hu.baader:sb-repl-bridge:0.23.0`; publication to a remote Maven repository is a separate release step.
+Build the bridge locally using `./gradlew :sb-repl-bridge:jar` or `mvn -f sb-repl-bridge/pom.xml package`. The project version is `hu.baader:sb-repl-bridge:0.24.0`; publication to a remote Maven repository is a separate release step.
 
 `DevRuntimeBridgeConfig` records its own context on `ApplicationReadyEvent`, clears it on `ContextClosedEvent`, and ignores unrelated child contexts. It can remember readiness before an agent is attached. The agent remains the sole owner of `com.baader.devrt.SpringContextHolder`; the bridge contains no duplicate class with that name. Disable the bridge using `sb.repl.bridge.enabled=false`.
 
@@ -16,7 +16,7 @@ SnapshotHelper.save("data", dto);
 var restored = SnapshotHelper.load("data");
 ```
 
-LIVE references have session/application scope and expire. DATA is an atomic JSON snapshot capped at 200 MiB including metadata and requires application Jackson. `save` is synchronous; DATA captured from an application callback is accessible from the REPL in the same application namespace. Its serialized size is not a heap limit: loading/importing large data needs additional application memory. Missing codecs and serialization errors are reported; saving does not silently switch modes. Calls made from ordinary application threads use application scope; LIVE pins in a REPL session belong to that session. See the [main README](../README.md) for generic types, mix-ins, limits and migration.
+LIVE references have session/application scope and expire. DATA is an atomic JSON snapshot capped at 200 MiB including metadata and requires application Jackson. `save` is synchronous; DATA captured from an application callback is accessible from the REPL in the same application namespace. Its serialized size is not a heap limit: loading/importing large data needs additional application memory. Missing codecs and serialization errors are reported; saving does not silently switch modes. Calls made from ordinary application threads use application scope; LIVE pins in a REPL session belong to that session. See the [handbook](../docs/repl-help-en.md) for generic types, mix-ins, limits and migration.
 
 
 ## Capture rules
@@ -33,8 +33,8 @@ Arm the point from **Snapshots → Capture next** in the REPL. Set a snapshot na
 
 There are up to 16 independent session-owned rules per JVM. Multiple saves receive a sequence suffix, or use `${sequence}` in the output name; overlapping active output names are rejected. Pending rules expire after five minutes in the UI and are released on reset, disconnect or context replacement. A capture already claimed can finish. Saving is synchronous: it captures the caller's selected data before that caller continues. Snapshot mix-ins from the arming session are copied before projection begins, and overlapping rules share one supplier invocation. Use stable DTOs; this is not a transaction over concurrent mutations.
 
-Build/install the matching version from this checkout with `mvn -f sb-repl-bridge/pom.xml install -Dgpg.skip=true`, then use `hu.baader:sb-repl-bridge:0.23.0` in the development application. A source checkout or local build does not imply that this version has been published to Maven Central.
+Build/install the matching version from this checkout with `mvn -f sb-repl-bridge/pom.xml install -Dgpg.skip=true`, then use `hu.baader:sb-repl-bridge:0.24.0` in the development application. A source checkout or local build does not imply that this version has been published to Maven Central.
 
 ## Live values
 
-`SnapshotHelper.tap("cv-input", inputDto)` sends a live value to explicitly subscribed REPL sessions. Enable **Tap / Trace → Start tap** in IDEA, optionally with an exact label filter. An absent agent or no matching subscriber returns `false`; the call does not serialize or save the object. Double-click the event to inspect it, bind a nested value, or freeze a DATA snapshot. Event retention is 128 references and five minutes per session. See [the 0.11 workflow guide](../REPL_WORKFLOW_0_11.md).
+`SnapshotHelper.tap("cv-input", inputDto)` sends a live value to explicitly subscribed REPL sessions. Enable **Tap / Trace → Start tap** in IDEA, optionally with an exact label filter. An absent agent or no matching subscriber returns `false`; the call does not serialize or save the object. Double-click the event to inspect it, bind a nested value, or freeze a DATA snapshot. Event retention is 128 references and five minutes per session. See [the current handbook](../docs/repl-help-en.md).

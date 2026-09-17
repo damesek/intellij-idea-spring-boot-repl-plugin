@@ -135,7 +135,7 @@ internal class McpRouter(
         if (origin != null && origin != "http://$authority") return httpError(403, "Invalid origin")
         val supplied = request.header("Authorization").orEmpty().toByteArray(Charsets.UTF_8)
         if (!MessageDigest.isEqual(supplied, "Bearer $token".toByteArray(Charsets.UTF_8)))
-            return McpHttpResponse(401, headers = mapOf("WWW-Authenticate" to "Bearer realm=\"Spring Boot REPL\""))
+            return McpHttpResponse(401, headers = mapOf("WWW-Authenticate" to "Bearer realm=\"Spring Boot Debug REPL and MCP\""))
         if (request.method !in setOf("GET", "POST", "DELETE")) return McpHttpResponse(405, headers = mapOf("Allow" to "POST, GET, DELETE"))
         val version = request.header("MCP-Protocol-Version")
         if (version != null && version !in VERSIONS) return httpError(400, "Unsupported MCP version; supported: ${VERSIONS.joinToString()}")
@@ -166,7 +166,7 @@ internal class McpRouter(
             "capabilities" to McpJson.objectOf("tools" to McpJson.objectOf("listChanged" to false),"resources" to McpJson.objectOf("subscribe" to true,"listChanged" to false)).apply {
                 if(session.version==VERSIONS.first())add("tasks",McpJson.objectOf("list" to JsonObject(),"cancel" to JsonObject(),"requests" to McpJson.objectOf("tools" to McpJson.objectOf("call" to JsonObject()))))
             },
-            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "version" to "0.23.0"),
+            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "title" to "Spring Boot Debug REPL and MCP", "version" to "0.24.0"),
             "instructions" to "Use repl_status, then repl_analyze before repl_eval. If Spring was still starting when connected, use repl_bind_spring once context-ready is true. Variables and handles belong to this MCP session; Spring beans, application effects and persistent DATA snapshots are shared. Never replay execution after a timeout or lost response. Use repl_interrupt for a running call. Reset explicitly after a Spring context change. Sessions expire after 30 idle minutes. Large results are bounded previews."),
             mapOf("MCP-Session-Id" to sessionId))
     }
@@ -176,7 +176,7 @@ internal class McpRouter(
         val tool = McpTools.all.find { it.name == name } ?: throw McpError(-32602, "Unknown tool: ${name.take(128)}")
         if (!tool.enabled(permissions)) {
             audit(session, tool.name, "DENIED", emptyMap())
-            return success(id, McpTools.error("This tool is disabled. Change permissions in the plugin's MCP tab and restart the server."))
+            return success(id, McpResponses.error("This tool is disabled. Change permissions in the plugin's MCP tab and restart the server."))
         }
         val input = params["arguments"]?.let { if (!it.isJsonObject) throw McpError(-32602, "Arguments must be an object"); it.asJsonObject } ?: JsonObject()
         val arguments = tool.arguments(input)
@@ -185,12 +185,12 @@ internal class McpRouter(
         val auditId = audit(session, tool.name, "STARTED", arguments)
         try {
             val pending = synchronized(session) {
-                if (session.closed || session.unavailable) { audit(session, tool.name, "CLOSED", mapOf("request" to auditId)); return success(id, McpTools.error("REPL session closed or unavailable; task results remain readable")) }
-                if(task?.cancelled()==true)return success(id,McpTools.error("Task cancelled before dispatch"))
-                if (!control && session.running != null && session.running != task?.requestKey) { audit(session, tool.name, "BUSY", mapOf("request" to auditId)); return success(id, McpTools.error("Session is busy. Wait for completion or use repl_interrupt.")) }
+                if (session.closed || session.unavailable) { audit(session, tool.name, "CLOSED", mapOf("request" to auditId)); return success(id, McpResponses.error("REPL session closed or unavailable; task results remain readable")) }
+                if(task?.cancelled()==true)return success(id,McpResponses.error("Task cancelled before dispatch"))
+                if (!control && session.running != null && session.running != task?.requestKey) { audit(session, tool.name, "BUSY", mapOf("request" to auditId)); return success(id, McpResponses.error("Session is busy. Wait for completion or use repl_interrupt.")) }
                 if (!control && task==null && session.calls >= permissions.sessionQuota) {
                     audit(session, tool.name, "QUOTA_DENIED", mapOf("request" to auditId))
-                    return success(id, McpTools.error("Session tool-call quota reached. Close this session; review usage before starting another."))
+                    return success(id, McpResponses.error("Session tool-call quota reached. Close this session; review usage before starting another."))
                 }
                 if (!control && task==null) session.calls++
                 if (!control) session.running = idKey(id)
@@ -211,7 +211,7 @@ internal class McpRouter(
                 response["mcp-remaining-calls"] = (permissions.sessionQuota - session.calls).toString()
             }
             audit(session, tool.name, if (response.containsKey("err")) "ERROR" else "COMPLETED", mapOf("request" to auditId,"runtime-audit-id" to response["audit-id"].orEmpty(), "duration-ms" to ((clock()-started)/1000000).toString()))
-            return success(id, McpTools.sanitizeResult(McpTools.result(tool, arguments, response), permissions,
+            return success(id, McpResponses.sanitizeResult(McpResponses.result(tool, arguments, response), permissions,
                 redactedBeforePaging = tool.operation.startsWith("recording/") && response.containsKey("recording-json")))
         } catch (e: Exception) {
             runCatching { audit(session, tool.name, "UNCERTAIN", mapOf("request" to auditId,"duration-ms" to ((clock()-started)/1000000).toString())) }
@@ -221,7 +221,7 @@ internal class McpRouter(
             if (cause is TimeoutException || e is InterruptedException) session.backend.request("interrupt")
             if(task!=null){session.unavailable=true;runCatching { session.backend.close() }}
             else sessions.entries.find { it.value === session }?.let { remove(it.key, session) }
-            return success(id, McpTools.error("REPL request did not complete; this session was closed. Application effects may already have occurred. Check the app before creating a new session; do not automatically retry execution."))
+            return success(id, McpResponses.error("REPL request did not complete; this session was closed. Application effects may already have occurred. Check the app before creating a new session; do not automatically retry execution."))
         } finally {
             synchronized(session) { if (session.running == idKey(id)) session.running = null; session.touched = clock() }
         }

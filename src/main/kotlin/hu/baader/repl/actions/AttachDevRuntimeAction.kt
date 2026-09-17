@@ -21,9 +21,9 @@ class AttachDevRuntimeAction : AnAction("Attach & Inject Dev Runtime") {
                 val vms = com.sun.tools.attach.VirtualMachine.list().filter { it.id() != ProcessHandle.current().pid().toString() }
                 app.invokeLater {
                     if (project.isDisposed) return@invokeLater
-                    if (vms.isEmpty()) { Messages.showInfoMessage(project, "No attachable JVM found.", "Spring Boot REPL"); return@invokeLater }
+                    if (vms.isEmpty()) { Messages.showInfoMessage(project, "No attachable JVM found.", "Spring Boot Debug REPL and MCP"); return@invokeLater }
                     val items = vms.map { it.id() + "  " + it.displayName() }.toTypedArray()
-                    val selected = Messages.showChooseDialog("Select the JVM to attach", "Spring Boot REPL", items, items.first(), null)
+                    val selected = Messages.showChooseDialog("Select the JVM to attach", "Spring Boot Debug REPL and MCP", items, items.first(), null)
                     if (selected < 0) return@invokeLater
                     app.executeOnPooledThread {
                         try {

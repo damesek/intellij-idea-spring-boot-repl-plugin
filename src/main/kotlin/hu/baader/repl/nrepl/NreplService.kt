@@ -59,7 +59,7 @@ class NreplService(private val project: Project) : Disposable {
         val configured = PluginSettingsState.getInstance().state.endpointFile
         val path = endpoint ?: configured.takeIf { it.isNotBlank() }?.let { Path.of(it) }
         if (path == null) {
-            change(State.FAILED, "Start an application with Enable Spring Boot REPL, or select an agent endpoint file in Settings.")
+            change(State.FAILED, "Start an application with Enable Spring Boot Debug REPL and MCP, or select an agent endpoint file in Settings.")
             ui { onComplete?.invoke(false) }; return
         }
         connectEndpoint(path, { true }, onComplete)

@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     uses: ./.github/workflows/verify.yml
@@ -26,10 +29,14 @@ jobs:
           java-version: "17"
           server-id: github
           server-username: GITHUB_ACTOR
-          server-password: ${{ secrets.GITHUB_TOKEN }}
+          server-password: GITHUB_TOKEN
 
       - name: Publish sb-repl-bridge
-        run: mvn -B -f sb-repl-bridge/pom.xml deploy
+        run: mvn -B -f sb-repl-bridge/pom.xml -Pgithub deploy -Dgpg.skip=true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish sb-repl-agent
-        run: mvn -B -f sb-repl-agent/pom.xml deploy
+        run: mvn -B -f sb-repl-agent/pom.xml -Pgithub deploy -Dgpg.skip=true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

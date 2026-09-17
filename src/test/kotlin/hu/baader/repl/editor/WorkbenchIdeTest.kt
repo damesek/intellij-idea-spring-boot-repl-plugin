@@ -19,6 +19,7 @@ class WorkbenchIdeTest : BasePlatformTestCase() {
         val manager = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
         val window = manager.getToolWindow("Spring Boot REPL") ?: manager.registerToolWindow("Spring Boot REPL", true, com.intellij.openapi.wm.ToolWindowAnchor.BOTTOM)
         val before = window.contentManager.contents.toSet()
+        hu.baader.repl.ui.JavaReplToolWindowFactory().init(window)
         com.intellij.openapi.util.IconLoader.activate()
         try {
             hu.baader.repl.ui.JavaReplToolWindowFactory().createToolWindowContent(project, window)

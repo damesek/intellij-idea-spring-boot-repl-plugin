@@ -22,7 +22,8 @@ with ZipFile(sys.argv[1]) as jar:
                      "com/baader/devrt/BeanExplorer.class", "com/baader/devrt/InvocationPlan.class",
                      "com/baader/devrt/SessionWatches.class", "com/baader/devrt/CaseRegression.class",
                      "com/baader/devrt/AsyncRecorder.class", "com/baader/devrt/bootstrap/AsyncBridge.class",
-                     "com/baader/devrt/ReplNotifications.class",
+                     "com/baader/devrt/ReplNotifications.class", "com/baader/devrt/ReplSession.class",
+                     "com/baader/devrt/CaseOperations.class",
                      "hu/baader/repl/protocol/HibernateSnapshot.class", "hu/baader/repl/protocol/HibernateObservation.class",
                      "hu/baader/repl/protocol/SqlSnapshot.class", "hu/baader/repl/protocol/SqlObservation.class",
                      "case-export/CaseHibernateProbe.java", "case-export/CaseSqlCounter.java", "case-export/SqlText.java"):

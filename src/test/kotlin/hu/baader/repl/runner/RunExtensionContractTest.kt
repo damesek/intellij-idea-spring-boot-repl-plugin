@@ -64,7 +64,7 @@ class RunExtensionContractTest {
         val extension=SpringBootReplRunConfigurationExtension()
         val fragment=(invoke(extension,"createFragments",config) as List<*>).single() as com.intellij.execution.ui.SettingsEditorFragment<*, *>
         assertFalse(fragment.isCanBeHidden)
-        assertEquals("Enable Spring Boot REPL",(fragment.component() as com.intellij.ui.components.JBCheckBox).text)
+        assertEquals("Enable Spring Boot Debug REPL and MCP",(fragment.component() as com.intellij.ui.components.JBCheckBox).text)
         assertFalse(extension.isApplicableFor(configuration("Kotlin")))
         assertFalse(extension.isApplicableFor(configuration("ClojureREPL")))
         fragment.dispose()
@@ -73,6 +73,9 @@ class RunExtensionContractTest {
         val xml=javaClass.getResourceAsStream("/META-INF/plugin.xml")!!.use { String(it.readAllBytes(),Charsets.UTF_8) }
         assertFalse(xml.contains("use-idea-classloader"))
         assertTrue(xml.contains("<depends>com.intellij.java</depends>"))
+        assertTrue(xml.contains("<name>Spring Boot Debug REPL and MCP</name>"))
+        assertTrue(xml.contains("<id>hu.baader.java-over-nrepl</id>"))
+        assertTrue(xml.contains("toolWindow id=\"Spring Boot REPL\""))
         assertTrue(xml.contains("SpringBootReplRunConfigurationExtension"))
     }
 }

@@ -25,6 +25,6 @@ internal class McpTask(val requestKey:String,val ttl:Long) {
     @Synchronized fun cancel(){
         if(terminal())throw McpError(-32602,"Task is already terminal")
         state="cancelled";updated=Instant.now().toString()
-        result.complete(McpJson.objectOf("result" to McpTools.error("Task cancelled. Interruption is cooperative; effects may have occurred. Session stays busy until execution returns.")))
+        result.complete(McpJson.objectOf("result" to McpResponses.error("Task cancelled. Interruption is cooperative; effects may have occurred. Session stays busy until execution returns.")))
     }
 }

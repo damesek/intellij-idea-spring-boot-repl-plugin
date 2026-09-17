@@ -3,6 +3,7 @@ package hu.baader.repl.settings
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
@@ -23,7 +24,7 @@ class PluginSettingsConfigurable : SearchableConfigurable {
     private lateinit var base: JBTextField
     private var initialKey = ""
     override fun getId() = "hu.baader.repl.settings"
-    override fun getDisplayName() = "Spring Boot REPL"
+    override fun getDisplayName() = "Spring Boot Debug REPL and MCP"
     override fun createComponent(): JComponent {
         endpoint = browse("properties", "Select REPL Endpoint")
         agent = browse("jar", "Select Agent JAR")
@@ -46,7 +47,9 @@ class PluginSettingsConfigurable : SearchableConfigurable {
         return panel
     }
     private fun browse(extension: String, title: String) = TextFieldWithBrowseButton().apply {
-        addBrowseFolderListener(title, null, null, FileChooserDescriptorFactory.createSingleFileDescriptor(extension))
+        addBrowseFolderListener(TextBrowseFolderListener(
+            FileChooserDescriptorFactory.createSingleFileDescriptor(extension).withTitle(title)
+        ))
     }
     override fun isModified(): Boolean {
         val s = settings

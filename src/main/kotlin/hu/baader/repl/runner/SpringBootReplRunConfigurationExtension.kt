@@ -45,10 +45,10 @@ class SpringBootReplRunConfigurationExtension : RunConfigurationExtension() {
         element.removeChildren("springBootRepl")
         if (enabled(configuration)) element.addContent(Element("springBootRepl").setAttribute("enabled", "true"))
     }
-    override fun getEditorTitle() = "Spring Boot REPL"
+    override fun getEditorTitle() = "Spring Boot Debug REPL and MCP"
     override fun <P : RunConfigurationBase<*>> createEditor(configuration: P): SettingsEditor<P> =
         object : SettingsEditor<P>() {
-            private val checkbox = JBCheckBox("Enable Spring Boot REPL")
+            private val checkbox = JBCheckBox("Enable Spring Boot Debug REPL and MCP")
             override fun resetEditorFrom(s: P) { checkbox.isSelected = enabled(s) }
             override fun applyEditorTo(s: P) { s.putCopyableUserData(ENABLED, checkbox.isSelected) }
             override fun createEditor(): JComponent = checkbox
@@ -57,7 +57,7 @@ class SpringBootReplRunConfigurationExtension : RunConfigurationExtension() {
     // Modern Spring Boot/Application editors use fragments; keep the checkbox visible by default.
     override fun <P : RunConfigurationBase<*>> createFragments(configuration: P): List<SettingsEditor<P>> {
         val fragment = SettingsEditorFragment<P, JBCheckBox>(
-            "springBootRepl", "Enable Spring Boot REPL", "Java", JBCheckBox("Enable Spring Boot REPL"),
+            "springBootRepl", "Enable Spring Boot Debug REPL and MCP", "Java", JBCheckBox("Enable Spring Boot Debug REPL and MCP"),
             { s, component -> component.isSelected = enabled(s) },
             { s, component -> s.putCopyableUserData(ENABLED, component.isSelected) },
             { true }

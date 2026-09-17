@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.23.0"
+version = "0.24.0"
 
 repositories {
     mavenCentral()
@@ -48,7 +48,31 @@ val copyDevRuntimeAgent = tasks.register<Copy>("copyDevRuntimeAgent") {
 
 sourceSets.main {
     resources.srcDir(bundledAgentDir)
-    resources.srcDir("docs")
+}
+
+allprojects {
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
+}
+
+val verifyModuleVersions by tasks.registering {
+    group = "verification"
+    description = "Prevent release version drift between the plugin and Maven runtime/bridge packages."
+    inputs.property("pluginVersion", project.version.toString())
+    val poms = listOf("sb-repl-agent/pom.xml", "sb-repl-bridge/pom.xml")
+    inputs.files(poms)
+    doLast {
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        }
+        for (pom in poms) {
+            val document = factory.newDocumentBuilder().parse(file(pom))
+            val actual = document.documentElement.getElementsByTagName("version").item(0).textContent.trim()
+            check(actual == project.version.toString()) { "$pom declares $actual; expected ${project.version}" }
+        }
+    }
 }
 
 kotlin {
@@ -96,7 +120,7 @@ tasks.processResources {
 
 intellijPlatform {
     pluginConfiguration {
-        name = "Spring Boot REPL"
+        name = "Spring Boot Debug REPL and MCP"
         id = "hu.baader.java-over-nrepl"
         version = project.version.toString()
         vendor {
@@ -104,10 +128,19 @@ intellijPlatform {
         }
         description = """
             Java REPL for a running Spring Boot application.
-            Enable Spring Boot REPL in an existing Spring Boot or Java Application run configuration.
+            Enable Spring Boot Debug REPL and MCP in an existing Spring Boot or Java Application run configuration.
             The bundled agent starts on loopback, publishes a private endpoint and binds the ready Spring context.
             Evaluate Java snippets with persistent imports and definitions; inspect real values and use LIVE, DATA or RECIPE snapshots.
             Workbook saving never executes code. HTTP and reviewed AI requests are optional.
+        """.trimIndent()
+        changeNotes = """
+            <p>0.24.0</p>
+            <ul>
+              <li>Renamed to Spring Boot Debug REPL and MCP while preserving settings and configuration IDs.</li>
+              <li>Improved session cleanup and CASE result retention after rejected edits.</li>
+              <li>Separated runtime, MCP and HTTP responsibilities and removed obsolete code and packaging assets.</li>
+              <li>Updated the concise README and bundled English and Hungarian manuals.</li>
+            </ul>
         """.trimIndent()
 
         ideaVersion {
@@ -119,7 +152,7 @@ intellijPlatform {
 
 // A user-triggered buildPlugin includes the regression suite.
 tasks.named("check") {
-    dependsOn(":dev-runtime:check", ":repl-protocol:check", ":sb-repl-bridge:check")
+    dependsOn(verifyModuleVersions, ":dev-runtime:check", ":repl-protocol:check", ":sb-repl-bridge:check")
 }
 tasks.named("buildPlugin") { dependsOn(tasks.named("check")) }
 val testJavaLauncher = javaToolchains.launcherFor {

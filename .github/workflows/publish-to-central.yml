@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     uses: ./.github/workflows/verify.yml
@@ -14,6 +17,7 @@ jobs:
     env:
       CENTRAL_PUBLISHING_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
       CENTRAL_PUBLISHING_PASSWORD: ${{ secrets.SONATYPE_TOKEN }}
+      MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
     steps:
       - name: Checkout
@@ -25,16 +29,13 @@ jobs:
           distribution: temurin
           java-version: "17"
           server-id: central
-          server-username: ${{ secrets.SONATYPE_USERNAME }}
-          server-password: ${{ secrets.SONATYPE_TOKEN }}
-          # GPG kulcsot manuálisan importáljuk a következő lépésben
-
-      - name: Import GPG private key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          server-username: CENTRAL_PUBLISHING_USERNAME
+          server-password: CENTRAL_PUBLISHING_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Publish sb-repl-bridge to Maven Central
-        run: mvn -B -f sb-repl-bridge/pom.xml clean deploy -Dgpg.keyname=${{ secrets.GPG_KEYNAME }} -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -f sb-repl-bridge/pom.xml -Pcentral deploy
 
       - name: Publish sb-repl-agent to Maven Central
-        run: mvn -B -f sb-repl-agent/pom.xml clean deploy -Dgpg.keyname=${{ secrets.GPG_KEYNAME }} -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -f sb-repl-agent/pom.xml -Pcentral deploy

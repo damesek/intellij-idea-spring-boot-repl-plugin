@@ -7,68 +7,58 @@ import java.util.concurrent.*;
 
 /** Per-connection session ownership; every session has its own bounded execution queue. */
 public final class ReplHandler implements AutoCloseable {
-    private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ReplSession> sessions = new ConcurrentHashMap<>();
     private volatile boolean closed;
     private final ReplBindings.Scope contextListener = SpringContextHolder.observe(() -> {
         Object current = SpringContextHolder.get();
-        for (Session session : sessions.values()) {
-            ReplNotifications.publish(session.id,"context.changed",Map.of("ready",current!=null));
-            if(session.context == null || session.context == current)continue;
+        for (ReplSession session : sessions.values()) {
+            ReplNotifications.publish(session.id, "context.changed", Map.of("ready", current != null));
+            if (session.context == null || session.context == current) continue;
             session.expired = true;
             session.interrupt();
             try { session.queue.execute(() -> { synchronized (session) { session.invalidate(); } }); }
             catch (RejectedExecutionException ignored) { /* The running task also releases expired state. */ }
         }
     });
-    private static final class Session {
-        volatile JShellSession shell;
-        volatile JShellSession caseShell;
-        volatile ExecutionPolicy policy = ExecutionPolicy.from(Map.of());
-        JShellSession.EvalResult lastEvaluation;
-        String lastCode = "";
-        final Map<String,Map<String,Object>> caseResults = new LinkedHashMap<>();
-        final java.util.concurrent.atomic.AtomicLong interruptions = new java.util.concurrent.atomic.AtomicLong();
-        final ObjectInspector inspector = new ObjectInspector();
-        final SessionWatches watches = new SessionWatches();
-        volatile Object context;
-        volatile boolean closing;
-        volatile boolean expired;
-        final java.util.concurrent.atomic.AtomicBoolean cleaned = new java.util.concurrent.atomic.AtomicBoolean();
-        final ExecutorService queue = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(32),
-                runnable -> { Thread thread = new Thread(runnable, "sb-repl-session"); thread.setDaemon(true); return thread; });
-        Session() { context = SpringContextHolder.get(); shell = new JShellSession(context); }
-        void interrupt() { interruptions.incrementAndGet(); shell.interrupt(); JShellSession running=caseShell; if(running!=null) running.interrupt(); }
-        void cleanup() { if (cleaned.compareAndSet(false, true)) { shell.close(); inspector.clear(); watches.clear(); caseResults.clear(); SnapshotManager.release(id); RuntimeEvents.release(id); } }
-        void invalidate() { if (expired) { shell.close(); inspector.clear(); watches.clear(); caseResults.clear(); context = null; SnapshotManager.release(id); RuntimeEvents.release(id); } }
-        String id;
-    }
     public synchronized String createSession() {
         if (closed || sessions.size() >= 8) throw new IllegalStateException("Session limit reached");
         String id = UUID.randomUUID().toString();
-        Session session = new Session(); session.id = id; RuntimeEvents.register(id); ReplNotifications.register(id); sessions.put(id, session); return id;
+        ReplSession session = new ReplSession(id);
+        RuntimeEvents.register(id);
+        ReplNotifications.register(id);
+        sessions.put(id, session);
+        return id;
     }
     public void submit(String sessionId, Runnable task) {
-        Session session = required(sessionId);
+        ReplSession session = required(sessionId);
         session.queue.execute(() -> {
             try { task.run(); }
-            finally { synchronized (session) { session.invalidate(); if (session.closing) session.cleanup(); } Thread.interrupted(); }
+            finally {
+                synchronized (session) {
+                    session.invalidate();
+                    if (session.closing) session.cleanup();
+                }
+                Thread.interrupted();
+            }
         });
     }
-    private Session required(String id) {
-        Session session = sessions.get(id);
+    private ReplSession required(String id) {
+        ReplSession session = sessions.get(id);
         if (session == null) throw new IllegalArgumentException("Session missing or expired; reconnect");
         return session;
     }
     public void interrupt(String id) { required(id).interrupt(); }
     public void closeSession(String id) {
-        Session session = sessions.remove(id);
+        ReplSession session = sessions.remove(id);
         if (session != null) {
             ReplNotifications.release(id);
-            session.closing = true; SnapshotTriggers.release(id); RuntimeEvents.release(id);
+            session.closing = true;
+            SnapshotTriggers.release(id);
+            RuntimeEvents.release(id);
             session.interrupt();
             // Cleanup is serialized after any running eval; it never blocks the transport/UI thread.
             try { session.queue.execute(session::cleanup); }
-            catch (RejectedExecutionException ignored) {}
+            catch (RejectedExecutionException ignored) { /* An accepted task releases state in submit's finally block. */ }
             session.queue.shutdown();
         }
     }
@@ -94,7 +84,7 @@ public final class ReplHandler implements AutoCloseable {
         entry.put("code", code); entry.put("codeSha256", AuditTrail.hash(code));
         for (String field : List.of("name", "point", "execution-mode", "transaction-manager", "class", "method", "version", "prefix"))
             if (message.containsKey(field)) entry.put(field, message.get(field));
-        Session currentSession = sessions.get(session);
+        ReplSession currentSession = sessions.get(session);
         if (currentSession != null && Set.of("eval", "java-eval", "case/run", "case/run-batch").contains(op))
             currentSession.policy.arguments().forEach(entry::putIfAbsent);
         String audit;
@@ -126,7 +116,7 @@ public final class ReplHandler implements AutoCloseable {
             String id = message.getOrDefault("session", "");
             if (op.equals("close")) { closeSession(id); return done(Map.of("value", "Session closed")); }
             if (op.equals("interrupt")) { interrupt(id); return done(Map.of("value", "Interrupt requested; application side effects are not rolled back")); }
-            Session session = required(id);
+            ReplSession session = required(id);
             if (Set.of("trace/history", "trace/call", "trace/stop").contains(op)) {
                 if (session.expired || session.closing) return error("Session expired; recording ended");
                 return switch (op) {
@@ -159,13 +149,11 @@ public final class ReplHandler implements AutoCloseable {
                 };
             }
             synchronized (session) {
+                if (session.closing) return error("Session closed; reconnect");
                 try (var ignored = SnapshotManager.scope(id)) {
                     Object current = SpringContextHolder.get();
                     if (op.equals("session/reset")) {
-                        session.shell.close(); session.inspector.clear(); SnapshotManager.release(id); RuntimeEvents.release(id); RuntimeEvents.register(id);
-                        session.context = current; session.shell = new JShellSession(current);
-                        session.lastEvaluation = null; session.lastCode = ""; session.caseResults.clear(); session.watches.clear();
-                        session.expired = false;
+                        session.reset(current);
                         return done(Map.of("reset", true, "value", "Session reset", "context-ready", current != null, "context-epoch", SpringContextHolder.epoch()));
                     }
                     if (session.expired || (session.context != null && session.context != current)) {
@@ -185,6 +173,7 @@ public final class ReplHandler implements AutoCloseable {
                         if (session.context != current) { session.shell.bindContext(current); session.context = current; RuntimeEvents.register(id); }
                         return done(Map.of("value", "true", "context-ready", true, "context-epoch", SpringContextHolder.epoch()));
                     }
+                    if (CaseOperations.supports(op)) return CaseOperations.handle(op, message, session, current);
                     return switch (op) {
                         case "execution/policy" -> {
                             Map<String,Object> value = new LinkedHashMap<>(session.policy.arguments());
@@ -321,61 +310,6 @@ public final class ReplHandler implements AutoCloseable {
                         case "snapshot/import" -> { SnapshotManager.importJson(message.get("name"), message.get("json")); yield done(Map.of("value", "DATA imported")); }
                         case "recipe/save" -> { SnapshotManager.saveRecipe(message.get("name"), message.get("code")); yield done(Map.of("value", "Recipe saved; not executed")); }
                         case "recipe/load" -> done(Map.of("value", SnapshotManager.loadRecipe(message.get("name"))));
-                        case "case/save" -> { session.caseResults.remove(message.get("name")); SnapshotManager.saveCase(message.get("name"),SnapshotCases.definition(message)); yield done(Map.of("value","Test case saved; no code executed")); }
-                        case "case/load" -> done(SnapshotManager.loadCase(message.get("name")));
-                        case "case/list" -> done(Map.of("value",String.join("\n",SnapshotManager.list().stream().filter(line->line.split("\t").length>2&&line.split("\t")[2].equals("CASE")).map(line->{
-                            String name=line.split("\t")[0];Map<String,String> saved=SnapshotManager.loadCase(name);
-                            return name+"\t"+saved.getOrDefault("tags","")+"\t"+saved.getOrDefault("disabled","false")+"\t"+SnapshotCases.rows(saved).size();
-                        }).toList())));
-                        case "case/result" -> {
-                            Map<String,Object> cached=session.caseResults.get(message.get("name"));
-                            if(cached==null)throw new IllegalArgumentException("No CASE result in this session");
-                            if(message.containsKey("row")) {
-                                List<?> rows=(List<?>)CaseJson.parse(cached.getOrDefault("rows-json","[]").toString(),2_000_000);
-                                int row=Integer.parseInt(message.get("row"));if(row<0||row>=rows.size())throw new IllegalArgumentException("Invalid result row index");
-                                yield done(Map.of("value",CaseJson.write(rows.get(row)),"run-id",cached.getOrDefault("run-id","")));
-                            }
-                            yield done(cached);
-                        }
-                        case "case/run", "case/run-batch" -> {
-                            Map<String,String> settings=new LinkedHashMap<>(session.policy.arguments());settings.putAll(message);
-                            ExecutionPolicy policy=ExecutionPolicy.from(settings);
-                            long deadline=System.nanoTime()+policy.timeoutMillis*1_000_000L,interruptions=session.interruptions.get();
-                            List<String> names=op.equals("case/run")?List.of(message.get("name")):message.getOrDefault("names","").lines().filter(n->!n.isBlank()).toList();
-                            if(names.isEmpty()||names.size()>20||new HashSet<>(names).size()!=names.size())throw new IllegalArgumentException("Select 1–20 distinct saved cases");
-                            Map<String,Map<String,String>> definitions=new LinkedHashMap<>();int rowCount=0;
-                            for(String name:names) {
-                                Map<String,String> definition=SnapshotCases.definition(SnapshotManager.loadCase(name));
-                                if(!"true".equals(definition.get("disabled")))SnapshotCases.requireData(definition);
-                                rowCount+=SnapshotCases.rows(definition).size();definitions.put(name,definition);
-                                String code=SnapshotCases.source(definition);
-                                AuditTrail.append("runtime-"+ProcessHandle.current().pid(),Map.of("session",id,"request",message.get("audit-request"),"operation",op,"name",name,"phase","SOURCE","code",code,"codeSha256",AuditTrail.hash(code)));
-                            }
-                            if(rowCount>100)throw new IllegalArgumentException("At most 100 parameter rows per batch");
-                            List<Map<String,Object>> results=new ArrayList<>();
-                            for(var saved:definitions.entrySet()) {
-                                String baseline="true".equals(saved.getValue().get("disabled"))?"":CaseRegression.identity(saved.getValue(),policy);
-                                Map<String,Object> result=CaseRunner.run(id,saved.getKey(),saved.getValue(),current,policy,deadline,session::interrupt,
-                                        ()->session.interruptions.get()!=interruptions||session.expired||session.closing,running->session.caseShell=running);
-                                result=new LinkedHashMap<>(result);result.put("baseline-identity",baseline);
-                                result.put("regression-json",CaseRegression.compare(session.caseResults.get(saved.getKey()),result));
-                                Map<String,Object> cached=new LinkedHashMap<>(CaseRunner.compact(result));
-                                cached.put("rows-json",result.getOrDefault("rows-json","[]"));
-                                session.caseResults.remove(saved.getKey());session.caseResults.put(saved.getKey(),cached);
-                                while(session.caseResults.size()>20)session.caseResults.remove(session.caseResults.keySet().iterator().next());
-                                results.add(result);
-                                if(Set.of("ERROR","CANCELLED").contains(result.get("outcome")))break;
-                            }
-                            if(op.equals("case/run"))yield done(results.get(0));
-                            yield done(Map.of("outcome",CaseRunner.aggregate(results,results.size()<names.size()),"value",String.join("\n",java.util.stream.IntStream.range(0,results.size()).mapToObj(i->names.get(i)+"\t"+results.get(i).get("outcome")).toList()),"cases-completed",results.size(),"cases-total",names.size()));
-                        }
-                        case "case/export-junit", "case/export-junit-file" -> {
-                            Map<String,String> exportPolicy=new LinkedHashMap<>(session.policy.arguments());exportPolicy.putAll(message);
-                            String pkg=message.getOrDefault("package","reproduction"),className=message.getOrDefault("class","ReproductionTest");
-                            if(op.equals("case/export-junit"))yield done(CaseJUnitExport.preview(message.get("name"),pkg,className,exportPolicy,message.get("file")));
-                            CaseJUnitExport.export(message.get("name"),pkg,className,exportPolicy,java.nio.file.Path.of(message.get("path")));
-                            yield done(Map.of("value","JUnit source and DATA resources exported; no code executed"));
-                        }
                         case "class-reload" -> {
                             var result = JavaCodeEvaluator.hotSwap(message.getOrDefault("code", ""));
                             yield result.success ? done(Map.of("value", result.message)) : error(result.error);
@@ -386,7 +320,7 @@ public final class ReplHandler implements AutoCloseable {
             }
         } catch (Exception exception) { return error(exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()); }
     }
-    private static Object selectedValue(Session session,Map<String,String> message) {
+    private static Object selectedValue(ReplSession session,Map<String,String> message) {
         if("true".equals(message.get("inspected"))) return session.inspector.current();
         if(message.containsKey("event")) return RuntimeEvents.value(session.id,Long.parseLong(message.get("event")));
         return session.shell.value(message.get("handle"),message.getOrDefault("expr",message.get("var")));
@@ -433,5 +367,9 @@ public final class ReplHandler implements AutoCloseable {
             default -> op == null ? "" : op;
         };
     }
-    @Override public void close() { closed = true; contextListener.close(); for (String id : sessions.keySet()) closeSession(id); }
+    @Override public synchronized void close() {
+        closed = true;
+        contextListener.close();
+        for (String id : sessions.keySet()) closeSession(id);
+    }
 }

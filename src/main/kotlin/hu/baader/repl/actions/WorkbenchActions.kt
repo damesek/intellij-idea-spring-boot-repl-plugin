@@ -45,14 +45,14 @@ object WorkbenchCatalog {
 class WorkbenchActions {
     private var inspector: ((Map<String, String>) -> Unit)? = null
     private var handlers: Map<String, () -> Unit> = emptyMap()
-    private var unavailable: (WorkbenchCatalog.Command) -> String? = { "Open the Spring Boot REPL tool window" }
+    private var unavailable: (WorkbenchCatalog.Command) -> String? = { "Open the Spring Boot Debug REPL and MCP tool window" }
     fun bind(actions: Map<String, () -> Unit>, reason: (WorkbenchCatalog.Command) -> String?, parent: Disposable, inspect: (Map<String,String>) -> Unit) {
         val bound = actions.toMap(); handlers = bound; unavailable = reason
         inspector = inspect
-        Disposer.register(parent, Disposable { if (handlers === bound) { handlers = emptyMap(); inspector = null; unavailable = { "Open the Spring Boot REPL tool window" } } })
+        Disposer.register(parent, Disposable { if (handlers === bound) { handlers = emptyMap(); inspector = null; unavailable = { "Open the Spring Boot Debug REPL and MCP tool window" } } })
     }
     fun inspect(reference: Map<String,String>) { inspector?.invoke(reference) }
-    fun reason(command: WorkbenchCatalog.Command): String? = if (command.label !in handlers) "Open the Spring Boot REPL tool window" else unavailable(command)
+    fun reason(command: WorkbenchCatalog.Command): String? = if (command.label !in handlers) "Open the Spring Boot Debug REPL and MCP tool window" else unavailable(command)
     fun perform(key: String) { WorkbenchCatalog.byKey(key)?.takeIf { reason(it) == null }?.let { handlers[it.label]?.invoke() } }
     companion object {
         fun get(project: Project): WorkbenchActions = project.service()

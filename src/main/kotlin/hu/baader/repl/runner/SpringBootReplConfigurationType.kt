@@ -6,7 +6,7 @@ import com.intellij.icons.AllIcons
 import javax.swing.Icon
 
 class SpringBootReplConfigurationType : ConfigurationType {
-    override fun getDisplayName(): String = "Spring Boot REPL"
+    override fun getDisplayName(): String = "Spring Boot Debug REPL and MCP"
 
     override fun getConfigurationTypeDescription(): String = "Run a Spring Boot application with the REPL agent attached."
 

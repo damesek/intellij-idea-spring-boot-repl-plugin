@@ -1,0 +1,25 @@
+# Historical release reports
+
+These reports record the implementation and checks at the time of each release. Paths, counts and limitations inside old reports may be historical. Use the [current documentation](../README.md) for supported workflows. Old build logs and distribution filenames are historical references, not files shipped by this checkout. Abandoned experiments and fallback packaging tools remain available in Git history.
+
+- [Spring Boot REPL 0.19.0: a rögzített hívások böngészése](CALL_BROWSER_0_19.md)
+- [0.15.0 - CASE 2.0](CASE_2_0_0_15.md)
+- [Beépített PDF-súgó, 0.12.1](HELP_PDF_0_12_1.md)
+- [Kibővített magyar PDF-kézikönyv, 0.13.1](HELP_UI_0_13_1.md)
+- [Hibernate-integráció - 0.22.0](HIBERNATE_0_22.md)
+- [IntelliJ IDEA 2025.2 – ellenőrzött 0.13.1 kiadás](IDEA_2025_2_0_13_1.md)
+- [MCP az AI-agentek számára - 0.13.0](MCP_0_13.md)
+- [MCP-hozzáférés a hívásgráfhoz - 0.20.0](MCP_RECORDINGS_0_20.md)
+- [0.16.0 - Notebook, workspace és snapshot-történet](NOTEBOOK_WORKSPACE_0_16.md)
+- [sb-repl projekt-audit](PROJECT_AUDIT_2026-09-13.md)
+- [Spring Boot REPL 0.18.0: rögzített hívások a forrás mellett](RECORDED_CALLS_0_18.md)
+- [Spring Boot REPL – javítás és ellenőrzés](REPAIR_REPORT_2026-09-13.md)
+- [Spring Boot REPL 0.17.0 – használhatóság és snapshotpontok](REPL_UX_0_17.md)
+- [Spring Boot REPL 0.10.0 – a négy munkafolyamat](REPL_WORKFLOW_0_10.md)
+- [Spring Boot REPL 0.11.0 – élő adatok, tesztesetek és debugger](REPL_WORKFLOW_0_11.md)
+- [Spring Boot REPL 0.12.0 – automatikus nézet és futtatás nélküli kódellenőrzés](REPL_WORKFLOW_0_12.md)
+- [0.14.0 – Safety & Reproduction](SAFETY_REPRODUCTION_0_14.md)
+- [200 MiB snapshot – 0.9.1](SNAPSHOT_200MIB_REPORT.md)
+- [Spring Boot REPL használat, 0.12.1](SPRING_REPL_HELP.md)
+- [SQL-megfigyelés és N+1-jelzések - 0.21.0](SQL_RECORDINGS_0_21.md)
+- [Interactive Spring workflows - 0.23.0](WORKFLOWS_0_23.md)

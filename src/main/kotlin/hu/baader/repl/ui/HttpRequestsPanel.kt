@@ -4,11 +4,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.State
-import com.intellij.openapi.components.Storage
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.Splitter
@@ -36,9 +31,7 @@ import javax.swing.SwingConstants
 import javax.swing.event.ListSelectionListener
 import javax.swing.table.AbstractTableModel
 
-/**
- * HTTP Requests panel – replace the former Run Config tab with a lightweight request runner.
- */
+/** Edits saved HTTP requests and delegates explicit execution to the request runner. */
 class HttpRequestsPanel(
     private val project: Project,
     private val insertSnippet: (String) -> Unit,
@@ -411,29 +404,11 @@ class HttpRequestsPanel(
         return true
     }
 
-    private fun ensureUniqueId(desired: String, case: HttpRequestCase): String {
-        val existing = allCases().filter { it !== case }.mapNotNull { it.id.takeIf(String::isNotBlank) }.toMutableSet()
-        var normalized = requestService.normalizeId(desired).ifBlank { "http-case" }
-        if (!existing.contains(normalized)) return normalized
-        var counter = 1
-        var candidate: String
-        do {
-            candidate = "$normalized-${counter++}"
-        } while (existing.contains(candidate))
-        return candidate
-    }
+    private fun ensureUniqueId(desired: String, case: HttpRequestCase): String =
+        HttpRequestIds.unique(desired, allCases().filter { it !== case }.map { it.id })
 
-    private fun generateCaseId(preferred: String): String {
-        val existing = allCases().mapNotNull { it.id.takeIf { id -> id.isNotBlank() } }.toMutableSet()
-        var normalized = requestService.normalizeId(preferred).ifBlank { "http-case" }
-        if (!existing.contains(normalized)) return normalized
-        var counter = 1
-        var candidate: String
-        do {
-            candidate = "$normalized-${counter++}"
-        } while (existing.contains(candidate))
-        return candidate
-    }
+    private fun generateCaseId(preferred: String): String =
+        HttpRequestIds.unique(preferred, allCases().map { it.id })
 
     private fun allCases(): List<HttpRequestCase> = (0 until listModel.size()).map { listModel.getElementAt(it) }
 
@@ -454,108 +429,6 @@ class HttpRequestsPanel(
             .getNotificationGroup("Spring Boot REPL")
             .createNotification(message, NotificationType.INFORMATION)
             .notify(project)
-    }
-}
-
-data class HttpHeaderEntry(
-    var name: String = "",
-    var value: String = ""
-)
-
-data class HttpRequestCase(
-    var id: String = "",
-    var name: String = "",
-    var method: String = "GET",
-    var url: String = "",
-    var body: String = "",
-    var topic: String = "",
-    var version: String = "",
-    var description: String = "",
-    var headers: MutableList<HttpHeaderEntry> = mutableListOf()
-) {
-    fun displayLabel(): String = name.ifBlank { id.ifBlank { "HTTP request" } }
-    fun deepCopy(): HttpRequestCase = copy(headers = headers.map { it.copy() }.toMutableList())
-}
-
-@Service(Service.Level.PROJECT)
-@State(name = "JavaReplHttpRequests", storages = [Storage("javaReplHttpRequests.xml")])
-class HttpRequestService(private val project: Project) : PersistentStateComponent<HttpRequestService.State> {
-
-    data class State(
-        var requests: MutableList<HttpRequestCase> = mutableListOf(),
-        var lastSelectedId: String? = null
-    )
-
-    @Volatile private var myState = State()
-
-    private fun secretKey(id: String) = "http:" + project.locationHash + ":" + id
-    @Synchronized override fun getState(): State = State(
-        myState.requests.map { it.deepCopy().apply { url = ""; body = ""; headers.clear() } }.toMutableList(),
-        myState.lastSelectedId
-    )
-
-    @Synchronized override fun loadState(state: State) {
-        myState = state
-        val legacy = state.requests.filter { it.url.isNotBlank() }.toList()
-        ApplicationManager.getApplication().executeOnPooledThread {
-            legacy.forEach { request -> synchronized(this) {
-                if (myState === state && state.requests.any { it === request }) {
-                    runCatching {
-                        if (hu.baader.repl.settings.SecretStore.read(secretKey(request.id)).isBlank())
-                            hu.baader.repl.settings.SecretStore.write(secretKey(request.id), com.google.gson.Gson().toJson(request))
-                    }.onFailure { com.intellij.openapi.diagnostic.Logger.getInstance(HttpRequestService::class.java).warn("HTTP credential migration failed") }
-                }
-            } }
-        }
-    }
-
-    @Synchronized fun getRequests(): List<HttpRequestCase> = myState.requests.map { stored ->
-        try {
-            val protected = hu.baader.repl.settings.SecretStore.read(secretKey(stored.id))
-            if (protected.isBlank()) stored.deepCopy() else com.google.gson.Gson().fromJson(protected, HttpRequestCase::class.java) ?: stored.deepCopy()
-        } catch (e: Exception) {
-            com.intellij.openapi.diagnostic.Logger.getInstance(HttpRequestService::class.java).warn("HTTP case could not be read from PasswordSafe")
-            stored.deepCopy()
-        }
-    }
-
-    @Synchronized fun saveCase(case: HttpRequestCase) {
-        val deepCopy = case.deepCopy()
-        hu.baader.repl.settings.SecretStore.write(secretKey(deepCopy.id), com.google.gson.Gson().toJson(deepCopy))
-        val idx = myState.requests.indexOfFirst { it.id == deepCopy.id }
-        if (idx >= 0) {
-            myState.requests[idx] = deepCopy
-        } else {
-            myState.requests.add(deepCopy)
-        }
-    }
-
-    @Synchronized fun deleteCase(id: String?) {
-        if (id.isNullOrBlank()) return
-        runCatching { hu.baader.repl.settings.SecretStore.write(secretKey(id), "") }.onFailure {
-            com.intellij.openapi.diagnostic.Logger.getInstance(HttpRequestService::class.java).warn("Removed HTTP case credentials could not be cleared from PasswordSafe")
-        }
-        myState.requests.removeIf { it.id == id }
-        if (myState.lastSelectedId == id) {
-            myState.lastSelectedId = null
-        }
-    }
-
-    @Synchronized fun rememberLastSelected(id: String?) {
-        myState.lastSelectedId = id
-    }
-
-    @Synchronized fun getLastSelectedId(): String? = myState.lastSelectedId
-
-    fun normalizeId(raw: String): String =
-        raw.lowercase()
-            .replace("[^a-z0-9\\-]+".toRegex(), "-")
-            .replace("-+".toRegex(), "-")
-            .trim('-')
-
-    companion object {
-        @JvmStatic
-        fun getInstance(project: Project): HttpRequestService = project.service()
     }
 }
 

@@ -17,6 +17,12 @@ jobs:
         java: [17, 21]
     steps:
       - uses: actions/checkout@v4
+      - name: Check repository links and release versions
+        run: |
+          python3 scripts/check-repository.py
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            python3 scripts/check-repository.py --release-tag "$GITHUB_REF_NAME"
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

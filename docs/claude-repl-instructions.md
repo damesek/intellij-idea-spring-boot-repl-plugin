@@ -1,6 +1,6 @@
-# Munkautasítás Claude-nak: Spring Boot REPL MCP
+# Munkautasítás Claude-nak: Spring Boot Debug REPL and MCP
 
-Ezt a fájlt add át Claude-nak, amikor egy futó Java/Spring Boot alkalmazáson dolgozik. Önállóan használható. A kapcsolat beállítását a [magyar telepítési és használati útmutató](claude-repl-guide-hu.md) tartalmazza. Verzió: **sb-repl 0.23.0**, ellenőrzés dátuma: **2026-09-16**.
+Ezt a fájlt add át Claude-nak, amikor egy futó Java/Spring Boot alkalmazáson dolgozik. Önállóan használható. A kapcsolat beállítását a [magyar telepítési és használati útmutató](claude-repl-guide-hu.md) tartalmazza. Verzió: **sb-repl 0.24.0**, ellenőrzés dátuma: **2026-09-17**.
 
 Teljes felhasználói kézikönyv: [magyar](repl-help-hu.md) és [English](repl-help-en.md). Mindkettő PDF-ként is a plugin része: **Help (PDF) → Magyar / English**. Az angol kézikönyv 20-25., 40-42. és 49. fejezete az MCP-beállítást és az összes eszközt is leírja.
 
