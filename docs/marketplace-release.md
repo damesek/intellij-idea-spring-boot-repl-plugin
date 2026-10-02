@@ -8,6 +8,8 @@ Release candidate: **0.25.0**, on the **jetbrains-idea-plugin** branch of [dames
 
 **Plugin ID:** `hu.baader.java-over-nrepl`
 
+**License:** Eclipse Public License 2.0 (`EPL-2.0`), selected by the owner. [Full terms](../LICENSE) and [copyright/source notice](../NOTICE).
+
 **Short summary:** Java workbooks in your running Spring Boot application, with a complete local MCP toolset for AI clients.
 
 The English HTML description in `src/main/resources/META-INF/plugin.xml` is the single authoritative listing description. Build configuration supplies version and change notes. The interface has three primary tabs: Workbook, MCP and Tools. All ten supporting panels and all 82 MCP tools remain available. Advanced MCP settings can be opened on demand without changing their values or defaults.
@@ -42,13 +44,13 @@ Plugin Verifier checked this release ZIP with the following results:
 
 The remaining removal notice concerns `AnAction.displayTextInToolbar()` in the existing workbook menu. These notices should be addressed when extending compatibility to newer IDE versions; the current descriptor does not include those versions.
 
-The ZIP is **6,532,838 bytes**, SHA-256 `837b042863f1141e3e0666cdc0e0b8b6d055e5720b3fd65b4db759690fdb9c93`. Inspection confirmed the stable plugin ID, version, supported build range, Java snapshot handler registration, original SVG icons, privacy/third-party notices and both manuals. The plugin classpath has no duplicate classes and does not bundle the IntelliJ SDK or Spring. The agent manifest and private Byte Buddy libraries passed packaging checks, including retained library notices. The 82 unique MCP tool definitions and permissions are unchanged from the previous release.
+The EPL-licensed ZIP is **6,557,117 bytes**, SHA-256 `6c3b8c80b5ddb10c293f34853f2f33fa9cd44b8f1264137409500dbd8690802b`. Inspection confirmed the stable plugin ID, version, supported build range, Java snapshot handler registration, original SVG icons, privacy/third-party notices and both manuals. LICENSE and NOTICE are readable directly under the ZIP's `sb-repl/` directory and included in the plugin, protocol and bundled agent JARs. Both Maven binary packages carry the same terms and matching EPL 2.0 metadata. The plugin classpath has no duplicate classes and does not bundle the IntelliJ SDK or Spring. The agent manifest and private Byte Buddy libraries passed packaging checks, including retained library notices. All executable classes and private third-party libraries are byte-identical to the preceding 0.25.0 candidate; the 82 unique MCP tool definitions and permissions are unchanged.
 
 The English manual has 72 pages and the Hungarian manual 76 pages, with 52 outline entries in each. The repository and bundled PDF bytes match; source digests, every rendered page and page-boundary checks were verified. A connected interactive source-snapshot test remains a recommended release check.
 
 ## Publisher-owned submission steps
 
-1. **Choose the plugin-wide license/EULA.** The existing Maven POMs declare MIT, but applying MIT to the entire plugin requires the owner's confirmation. Add the selected terms as a repository LICENSE/EULA and include them in the plugin package. This is still a submission prerequisite until confirmed.
+1. **Provide the selected EPL 2.0 terms and source link.** Licensing is finalized: the repository contains the unchanged official EPL 2.0 text, the source/copyright notice and matching Maven license metadata. The installable ZIP includes readable LICENSE and NOTICE files and copies in the project JARs, including the bundled agent. Use the [license URL](https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/blob/jetbrains-idea-plugin/LICENSE) and [public source URL](https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/tree/jetbrains-idea-plugin) in the Marketplace form. Third-party terms remain intact.
 2. **Confirm the publisher identity and contact information.** Use the owner's JetBrains Marketplace account, accept the Developer Agreement, and complete the required trader/non-trader declaration. This preparation does not make those declarations for the owner.
 3. **Review the privacy statement and representative screenshots.** The optional AI and MCP paths can share application data; select the applicable privacy information in the submission form and link the data-handling document.
 4. **Upload the tested ZIP and listing metadata.** If this plugin ID is already owned by the publisher, upload an update to that entry. Otherwise create its first entry with the same stable ID. Signing can be configured separately when the publisher supplies the signing material.

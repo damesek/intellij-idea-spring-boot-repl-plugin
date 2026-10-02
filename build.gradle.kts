@@ -55,6 +55,11 @@ allprojects {
         isPreserveFileTimestamps = false
         isReproducibleFileOrder = true
     }
+    plugins.withId("java") {
+        tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+            from(rootProject.files("LICENSE", "NOTICE")) { into("META-INF") }
+        }
+    }
 }
 
 val verifyModuleVersions by tasks.registering {
@@ -116,7 +121,7 @@ val verifyBundledHelp by tasks.registering {
 
 tasks.processResources {
     dependsOn(copyDevRuntimeAgent, verifyBundledHelp)
-    from(listOf("LICENSE", "PRIVACY.md", "THIRD-PARTY-NOTICES.txt")) { into("META-INF") }
+    from(listOf("PRIVACY.md", "THIRD-PARTY-NOTICES.txt")) { into("META-INF") }
 }
 
 intellijPlatform {
@@ -134,6 +139,7 @@ intellijPlatform {
               <li>Keep the complete 82-tool MCP catalog and permissions; reveal advanced settings on demand.</li>
               <li>Connect purple source snapshot points to the Java debugger so they can save DATA when hit.</li>
               <li>Refresh both offline manuals, the scalable icon and data-handling documentation.</li>
+              <li>License the project under EPL 2.0 and include license/source notices in distributions.</li>
             </ul>
             <p>0.24.1</p>
             <ul>
@@ -160,7 +166,10 @@ intellijPlatform {
 tasks.named("check") {
     dependsOn(verifyModuleVersions, ":dev-runtime:check", ":repl-protocol:check", ":sb-repl-bridge:check")
 }
-tasks.named("buildPlugin") { dependsOn(tasks.named("check")) }
+tasks.named<Zip>("buildPlugin") {
+    dependsOn(tasks.named("check"))
+    from(files("LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.txt"))
+}
 val testJavaLauncher = javaToolchains.launcherFor {
     languageVersion.set(JavaLanguageVersion.of(providers.gradleProperty("testJdk").getOrElse("17").toInt()))
 }

@@ -11,6 +11,7 @@ Start with the [project overview](../README.md) for the workflow and installatio
 | Contributors and maintainers | [Engineering guide](engineering.md) · [Protocol](../PROTOCOL.md) |
 | Application developers | [Optional capture/lifecycle bridge](../sb-repl-bridge/README.md) · [Standalone agent](../sb-repl-agent/README.md) |
 | Data handling | [Privacy and storage](../PRIVACY.md) · [Third-party notices](../THIRD-PARTY-NOTICES.txt) |
+| Licensing | [EPL 2.0](../LICENSE) · [Copyright and source notice](../NOTICE) |
 | Marketplace publishers | [Current submission guide](marketplace-release.md) |
 | Release reviewers | [0.24.0 Marketplace audit](marketplace-audit-0.24.0.md) · [Historical reports](history/README.md) |
 

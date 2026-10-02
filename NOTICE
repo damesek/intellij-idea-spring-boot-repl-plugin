@@ -1,0 +1,15 @@
+Spring Boot Debug REPL and MCP
+Copyright (c) 2025-2026 Baader
+
+SPDX-License-Identifier: EPL-2.0
+
+The original source code and documentation in this project, including the IDE
+plugin, runtime agent, protocol and Spring bridge, are made available under the
+Eclipse Public License 2.0. A complete copy is included in LICENSE.
+
+Source code and documentation:
+https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/tree/jetbrains-idea-plugin
+
+Third-party components retain their own license terms and notices. See
+THIRD-PARTY-NOTICES.txt in this distribution or in the source repository, and
+the original LICENSE/NOTICE files inside the bundled dependency JARs.

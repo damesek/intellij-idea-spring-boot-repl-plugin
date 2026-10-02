@@ -2,5 +2,8 @@
 *.pdf binary
 *.jar binary
 
+# Keep the official EPL license text's upstream spacing unchanged.
+LICENSE whitespace=-blank-at-eol
+
 gradlew text eol=lf
 gradlew.bat text eol=crlf whitespace=cr-at-eol

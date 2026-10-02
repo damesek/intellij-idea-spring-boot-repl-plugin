@@ -50,7 +50,8 @@ tasks.test {
 tasks.jar {
     dependsOn(":repl-protocol:jar")
     from({ zipTree(project(":repl-protocol").tasks.named<Jar>("jar").get().archiveFile.get().asFile) }) {
-        exclude("META-INF/MANIFEST.MF")
+        // The agent's own resources already contain the same project-wide terms.
+        exclude("META-INF/MANIFEST.MF", "META-INF/LICENSE", "META-INF/NOTICE")
     }
     // Instrumentation dependencies are loaded by an isolated loader, not the application's loader.
     into("agent-libs") {

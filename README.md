@@ -40,6 +40,8 @@ HotSwap supports compatible method-body changes. Structural changes can require 
 
 **Version 0.25.0 · IntelliJ IDEA 2024.1–2025.2.x · Java 17 and 21 tested.** See the [engineering guide](docs/engineering.md) for the exact verification matrix and known limits.
 
+The project's original code and documentation are licensed under **EPL 2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for the terms, attribution and source location. Bundled third-party components retain their [own license terms](THIRD-PARTY-NOTICES.txt). The installable ZIP and project JARs include the license and source notice.
+
 ## Read more
 
 - **User handbooks:** [English PDF](output/pdf/spring-boot-repl-guide-en.pdf) · [Magyar PDF](output/pdf/spring-boot-repl-guide-hu.pdf). Both are also available offline in **Help (PDF)** inside the plugin.
