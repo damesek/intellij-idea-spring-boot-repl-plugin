@@ -47,7 +47,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         val editor = JavaReplEditorProvider.createEnhancedEditor(project)
         Disposer.register(toolWindow.disposable, Disposable { EditorFactory.getInstance().releaseEditor(editor) })
         val history = ReplHistoryService.getInstance(project)
-        val tabs = object : JTabbedPane(), com.intellij.openapi.actionSystem.DataProvider {
+        val tabs = object : ReplTabs(), com.intellij.openapi.actionSystem.DataProvider {
             override fun getData(id: String): Any? = when {
                 com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT.`is`(id) -> project
                 com.intellij.openapi.actionSystem.CommonDataKeys.EDITOR.`is`(id) -> editor
@@ -85,9 +85,9 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         resultTabs.addTab("Watches", watches)
         val snapshots = SimplifiedSnapshotsPanel({ service }, insert, { _, _ -> variables.refreshVariables() })
         val inspector = InspectorPanel(service) { variables.refreshVariables(); snapshots.refresh() }
-        val inspectValue: (Map<String,String>) -> Unit = { extra -> inspector.open(extra); tabs.selectedComponent = inspector }
+        val inspectValue: (Map<String,String>) -> Unit = { extra -> inspector.open(extra); tabs.showPanel(inspector) }
         variables = LoadedVariablesPanel({ service }, insert, inspectValue)
-        val events = RuntimeEventsPanel(project, service, inspectValue) { tabs.selectedIndex=tabs.indexOfTab("Tap / Trace") }
+        val events = RuntimeEventsPanel(project, service, inspectValue) { tabs.showTool("Tap / Trace") }
         val cases = SnapshotCasesPanel(project, service, inspectValue)
         val debugger = InteractiveDebuggerPanel(project, service, inspectValue)
         val mcp = McpPanel(McpService.getInstance(project))
@@ -145,8 +145,8 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
         button("Toggle live check") { liveCheck = !liveCheck; diagnostics.setEnabled(liveCheck); status.text = "Live check: " + if (liveCheck) "on" else "off" }
         button("Check code") { diagnostics.request() }
         button("Help (PDF)") { ReplHelp.open(project) }
-        button("MCP") { tabs.selectedComponent = mcp }
-        button("Bean explorer") { tabs.selectedComponent = beans; beans.refresh() }
+        button("MCP") { tabs.showPanel(mcp) }
+        button("Bean explorer") { tabs.showPanel(beans); beans.refresh() }
 
         lateinit var http: HttpRequestsPanel
         val workspaceActions = hu.baader.repl.workspace.WorkspaceActions(project, service, workspaceStore, notebook, { http }, { transcript.text }, { transcript.text = it }, { snapshots.refresh(); cases.refresh(); variables.refreshVariables() }, { status.text = it }, { busy })
@@ -271,22 +271,25 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             add(JSplitPane(JSplitPane.VERTICAL_SPLIT, editing, JBScrollPane(transcript)).apply { resizeWeight = 0.65 }, BorderLayout.CENTER)
             add(status, BorderLayout.SOUTH)
         }
-        tabs.addTab("Java REPL", repl); tabs.addTab("Variables", variables); tabs.addTab("Snapshots", snapshots)
-        tabs.addTab("Inspector", inspector); tabs.addTab("Tap / Trace", events); tabs.addTab("Cases / Reload", cases); tabs.addTab("Debugger", debugger)
+        tabs.install(repl, mcp)
+        tabs.addTool("Variables", variables); tabs.addTool("Snapshots", snapshots)
+        tabs.addTool("Inspector", inspector); tabs.addTool("Tap / Trace", events); tabs.addTool("Cases / Reload", cases); tabs.addTool("Debugger", debugger)
         val httpConsole = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
         Disposer.register(toolWindow.disposable, httpConsole)
         val httpRunner = HttpRequestRunner(project, httpConsole)
         Disposer.register(toolWindow.disposable, httpRunner)
         http = HttpRequestsPanel(project, insert, httpRunner)
-        tabs.addTab("HTTP", JSplitPane(JSplitPane.VERTICAL_SPLIT, http, httpConsole.component).apply { resizeWeight = 0.65 })
-        tabs.addTab("AI", AiAssistedPanel(project, service, AiContextMetadataStore.getInstance(project), insert) { tabs.selectedIndex = 0 })
-        tabs.addTab("Imports", ImportAliasesPanel())
-        tabs.addTab("MCP", mcp)
-        tabs.addTab("Beans", beans)
-        tabs.addChangeListener {
-            when (tabs.selectedIndex) { 1 -> variables.refreshVariables(); 2 -> snapshots.refresh() }
-            if (tabs.selectedComponent === events) events.refresh()
-            if (tabs.selectedComponent === cases) cases.refresh()
+        tabs.addTool("HTTP", JSplitPane(JSplitPane.VERTICAL_SPLIT, http, httpConsole.component).apply { resizeWeight = 0.65 })
+        tabs.addTool("AI", AiAssistedPanel(project, service, AiContextMetadataStore.getInstance(project), insert) { tabs.selectedIndex = 0 })
+        tabs.addTool("Imports", ImportAliasesPanel())
+        tabs.addTool("Beans", beans)
+        tabs.onPanelSelected {
+            when (tabs.activePanel) {
+                variables -> variables.refreshVariables()
+                snapshots -> snapshots.refresh()
+                events -> events.refresh()
+                cases -> cases.refresh()
+            }
         }
         Disposer.register(toolWindow.disposable, service.onMessage { message ->
             if (message["op"] == "connection") {
@@ -309,7 +312,7 @@ class JavaReplToolWindowFactory : ToolWindowFactory, DumbAware {
             structuredResult.showValue(message, text)
             resultTabs.selectedIndex = if (message["err"].isNullOrEmpty() && message.containsKey("view-data")) 0 else 1
             append("\n> " + message["snippet"].orEmpty() + "\n" + text + "\n")
-            if (tabs.selectedIndex == 1) variables.refreshVariables()
+            if (tabs.activePanel === variables) variables.refreshVariables()
         })
         fun shortcut(stroke: KeyStroke, action: () -> Unit) {
             object : com.intellij.openapi.project.DumbAwareAction() {

@@ -166,7 +166,7 @@ internal class McpRouter(
             "capabilities" to McpJson.objectOf("tools" to McpJson.objectOf("listChanged" to false),"resources" to McpJson.objectOf("subscribe" to true,"listChanged" to false)).apply {
                 if(session.version==VERSIONS.first())add("tasks",McpJson.objectOf("list" to JsonObject(),"cancel" to JsonObject(),"requests" to McpJson.objectOf("tools" to McpJson.objectOf("call" to JsonObject()))))
             },
-            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "title" to "Spring Boot Debug REPL and MCP", "version" to "0.24.0"),
+            "serverInfo" to McpJson.objectOf("name" to "spring-boot-repl", "title" to "Spring Boot Debug REPL and MCP", "version" to "0.25.0"),
             "instructions" to "Use repl_status, then repl_analyze before repl_eval. If Spring was still starting when connected, use repl_bind_spring once context-ready is true. Variables and handles belong to this MCP session; Spring beans, application effects and persistent DATA snapshots are shared. Never replay execution after a timeout or lost response. Use repl_interrupt for a running call. Reset explicitly after a Spring context change. Sessions expire after 30 idle minutes. Large results are bounded previews."),
             mapOf("MCP-Session-Id" to sessionId))
     }

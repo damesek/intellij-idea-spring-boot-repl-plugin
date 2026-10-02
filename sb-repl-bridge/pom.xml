@@ -6,10 +6,10 @@
 
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-bridge</artifactId>
-  <version>0.24.1</version>
+  <version>0.25.0</version>
     <name>Spring Boot Debug REPL and MCP - Bridge</name>
     <description>Auto-configuration that bridges a running Spring context to the sb-repl agent.</description>
-    <url>https://github.com/damesek/sb-repl</url>
+    <url>https://github.com/damesek/intellij-idea-spring-boot-repl-plugin</url>
 
     <properties>
         <java.version>17</java.version>
@@ -37,9 +37,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/damesek/sb-repl.git</connection>
-        <developerConnection>scm:git:ssh://github.com:damesek/sb-repl.git</developerConnection>
-        <url>https://github.com/damesek/sb-repl</url>
+        <connection>scm:git:https://github.com/damesek/intellij-idea-spring-boot-repl-plugin.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/damesek/intellij-idea-spring-boot-repl-plugin.git</developerConnection>
+        <url>https://github.com/damesek/intellij-idea-spring-boot-repl-plugin</url>
     </scm>
 
     <dependencies>

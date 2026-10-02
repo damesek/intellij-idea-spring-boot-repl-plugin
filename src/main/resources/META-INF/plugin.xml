@@ -5,16 +5,15 @@
     <vendor email="support@baader.hu" url="https://baader.hu">Baader</vendor>
     
     <description><![CDATA[
-      <b>Spring Boot Debug REPL and MCP</b><br/>
-      Enable the REPL in your existing Spring Boot or Java Application run configuration.
-      Keep its profiles, environment and program arguments. The bundled agent connects through a private local endpoint.<br/>
-      A single Java/JShell session preserves imports and definitions, exposes the ready Spring context as <code>ctx</code>,
-      and offers a workbook, completion, result inspection and variables.<br/>
-      LIVE pins retain session references; DATA snapshots persist typed JSON; RECIPE snapshots store code for explicit reuse.
-      Saving a workbook or snapshot does not rerun its expressions.<br/>
-      Optional HTTP requests and reviewed AI prompts use IDE PasswordSafe for credentials.
-      Start a local MCP server from the MCP tab to give AI clients separate REPL sessions,
-      with code analysis, evaluation, object inspection and snapshot tools. Java execution and HotSwap are configurable.
+      <p>Write Java workbooks inside your running Spring Boot application and connect AI clients through a local MCP server.</p>
+      <ul>
+        <li><b>Workbook:</b> run Java cells with persistent imports and variables, use the live Spring context as <code>ctx</code>, and inspect results.</li>
+        <li><b>MCP:</b> give each client a separate REPL session with the complete 82-tool catalog for analysis, inspection, snapshots and permitted execution.</li>
+        <li><b>Tools:</b> explore beans, capture DATA snapshots, record calls, compare saved cases and use compatible HotSwap changes.</li>
+      </ul>
+      <p>Enable the REPL in an existing Spring Boot or Java Application run configuration. Keep your normal profiles and arguments; the bundled agent uses a private local endpoint. Source snapshot points require Debug mode.</p>
+      <p>MCP permissions start with execution and changes disabled. Optional reviewed AI prompts go to your configured provider. Java execution can change the application; rollback covers participating synchronous database work.</p>
+      <p><a href="https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/blob/jetbrains-idea-plugin/README.md">Getting started and offline manuals</a> · <a href="https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/blob/jetbrains-idea-plugin/PRIVACY.md">Data handling</a> · <a href="https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/issues">Support and issues</a></p>
     ]]></description>
     
     <depends>com.intellij.modules.platform</depends>
@@ -25,6 +24,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <completion.confidence language="JAVA" implementationClass="hu.baader.repl.editor.ReplCompletionConfidence" order="first"/>
         <xdebugger.breakpointType implementation="hu.baader.repl.debug.SnapshotBreakpointType"/>
+        <debugger.javaBreakpointHandlerFactory implementation="hu.baader.repl.debug.SnapshotBreakpointHandlerFactory"/>
         <!-- Tool Window -->
         <toolWindow id="Spring Boot REPL"
                     factoryClass="hu.baader.repl.ui.JavaReplToolWindowFactory"

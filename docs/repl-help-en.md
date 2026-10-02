@@ -8,11 +8,11 @@ Tabs, buttons, fields and workflows for the IntelliJ IDEA plugin. Experiment wit
 
 **What does the REPL provide?** Work with the running Java application's own classes and Spring beans. The session retains imports, variables and methods. Inspect a result repeatedly, then save the data you need as a DATA snapshot.
 
-**Scope:** the 12 main tabs, subtabs, buttons and settings wired into the {{version}} source. Labels match the plugin's English UI. IDEA themes, keymaps and window sizes may change their placement. The layout diagram is a schematic, not a live screenshot.
+**Scope:** the three main tabs (Workbook, MCP, Tools), all ten supporting Tools panels, subtabs, buttons and settings wired into the {{version}} source. Labels match the plugin's English UI. IDEA themes, keymaps and window sizes may change their placement. The layout diagram is a schematic, not a live screenshot.
 
-**Updated:** September 17, 2026. This full English edition covers the same features as the Hungarian manual, including Claude/MCP setup and the SQL/Hibernate recording tools.
+**Updated:** October 2, 2026. This full English edition covers the same features as the Hungarian manual, including Claude/MCP setup and the SQL/Hibernate recording tools.
 
-**In the IDE:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > English or Magyar. The Java editor context menu offers the same choices. Java REPL > Tools > Help (PDF) opens a language picker. Both manuals are bundled and work offline.
+**In the IDE:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > English or Magyar. The Java editor context menu offers the same choices. Workbook > Tools > Help (PDF) opens a language picker. Both manuals are bundled and work offline.
 
 {{cover-summary}}
 
@@ -35,7 +35,7 @@ Click a chapter title to jump to its page. The PDF reader's bookmarks show the s
 ```
 
 4. Start the application with **Run** or **Debug**. Debugger features require Debug; ordinary REPL use works with Run.
-5. Open the **Spring Boot Debug REPL and MCP** tool window and wait for **READY**. In Java REPL, run:
+5. Open the **Spring Boot Debug REPL and MCP** tool window and wait for **READY**. In Workbook, run:
 
 ```java
 ctx.getBeanDefinitionCount()
@@ -60,13 +60,18 @@ The checkbox uses the plugin's bundled agent; no separate application dependency
 
 # 02. Map of the interface {#ui-map}
 
-The main tabs appear in this order. Java REPL has four primary icons and four action menus to leave more room for code. Tabs can wrap in a narrow window; drag the divider between code and results to resize them.
+The three main tabs are **Workbook**, **MCP** and **Tools**. Start with Workbook for Java cells or MCP for an AI client. Tools lists the supporting panels on its left. No feature or MCP tool has been removed.
 
-| Tab | Purpose |
+| Main tab | Purpose |
 | --- | --- |
-| Java REPL | Connection, Java workbook, execution, checking and results. |
+| Workbook | Connection, Java cells, execution, checking and results. |
+| MCP | Local MCP server, client configuration and permissions. Advanced settings are collapsed until needed. |
+| Tools | Variables, snapshots, inspection and the other supporting workflows below. |
+
+| Tools panel | Purpose |
+| --- | --- |
 | Variables | List, insert and inspect variables in your IDE session. |
-| Snapshots | Saved, Capture next and Compare subtabs for persistent data and capture rules. |
+| Snapshots | Saved, Capture next, Compare and Versions for persistent data and capture rules. |
 | Inspector | Navigate real objects through Value and Fields. |
 | Tap / Trace | Observe application values and method calls. |
 | Cases / Reload | Save snapshot-based cases, define expected results, rerun and HotSwap. |
@@ -74,16 +79,17 @@ The main tabs appear in this order. Java REPL has four primary icons and four ac
 | HTTP | Compose and run saved HTTP requests; generate snippets. |
 | AI | Review a prompt, send it to the configured API and obtain code suggestions. |
 | Imports | Save imports and apply them to a session. |
-| MCP | Local MCP server for external AI clients such as Claude. |
 | Beans | Bean definitions, dependencies, proxy metadata and prepared calls. |
+
+The following chapters use the panel names. For example, **Snapshots > Saved** means **Tools > Snapshots > Saved**. **Workbook > Tools** is the workbook's action menu, separate from the main Tools tab. Workbook keeps four primary icons and four action menus; drag the divider between code and results to resize them.
 
 {{ui-map}}
 
-**Result subtabs:** Watches holds pinned before/after observations. Java REPL > Value > Tree / Formatted / Raw. Cells shows individual execution evidence and output. **Output / errors** contains stdout/stderr and errors. **Inspector > Value** uses the same structured viewer; **Inspector > Fields** navigates the actual object.
+**Result subtabs:** Watches holds pinned before/after observations. Workbook > Value > Tree / Formatted / Raw. Cells shows individual execution evidence and output. **Output / errors** contains stdout/stderr and errors. **Inspector > Value** uses the same structured viewer; **Inspector > Fields** navigates the actual object.
 
-# 03. Java REPL: connection and execution {#repl-controls}
+# 03. Workbook: connection and execution {#repl-controls}
 
-**Location:** Java REPL's top toolbar. The four primary icons are **Connect**, **Run cell / selection**, **Interrupt** and **Save workspace**. Hover to see a name. The adjacent **Run**, **Workspace**, **Session** and **Tools** menus contain detailed actions. Connect uses a known endpoint or one selected in Settings; it does not start Spring.
+**Location:** Workbook's top toolbar. The four primary icons are **Connect**, **Run cell / selection**, **Interrupt** and **Save workspace**. Hover to see a name. The adjacent **Run**, **Workspace**, **Session** and **Tools** menus contain detailed actions. Connect uses a known endpoint or one selected in Settings; it does not start Spring.
 
 **Where to look:** Run contains cell execution and dependency analysis. Workspace contains workbook files, saving and history. Session contains connection, Bind, Reset and Execution settings. Tools contains checking, beans, imports, reproduction, audit, PDF help and MCP. Detailed errors and the transcript remain below; application/profile and confirmed execution mode appear above.
 
@@ -104,7 +110,7 @@ The main tabs appear in this order. Java REPL has four primary icons and four ac
 | Help (PDF) | Choose the English or Hungarian offline manual. No REPL connection is needed. |
 | MCP | Switch to MCP; this alone does not start the server. |
 
-# 04. Java REPL: workbook controls {#workbook}
+# 04. Workbook: workbook controls {#workbook}
 
 **Location:** Workspace menu. Insert bean and Apply configured imports are in Tools. Source text and live session state can differ; chapters 35 and 36 explain the state indicators and workspace files.
 
@@ -115,7 +121,7 @@ The main tabs appear in this order. Java REPL has four primary icons and four ac
 | Save workbook | Save source as a `.jsh` file. Does not save live objects. |
 | Save RECIPE | Save selected code, or the whole workbook without a selection, under a name in runtime storage. Does not execute it. |
 | History | Choose from up to 100 recent snippets and insert the selected code at the cursor. |
-| Clear history | Clear history and the lower Java REPL transcript, leaving variables intact. |
+| Clear history | Clear history and the lower Workbook transcript, leaving variables intact. |
 | Insert bean | Choose a bean name/type and optional public type; insert a `ctx.getBean(...)` declaration. It retrieves the bean only when run. |
 | Apply configured imports | Import enabled fully qualified class names from Imports into this session. |
 
@@ -138,7 +144,7 @@ Run the first cell, then the second. The second produces `12`. Editing only the 
 
 # 05. Results, JSON and code checking {#results}
 
-**Location:** the result panel on the right of Java REPL and the checking status below the editor.
+**Location:** the result panel on the right of Workbook and the checking status below the editor.
 
 | Control | Display or action |
 | --- | --- |
@@ -164,12 +170,12 @@ This is compiler syntax/type analysis, not full business validation or a compreh
 
 # 06. Variables: session values {#variables}
 
-**Location:** the second main tab. It lists variables acknowledged by the runtime for the IDE session and refreshes when opened.
+**Location:** Tools > Variables. It lists variables acknowledged by the runtime for the IDE session and refreshes when opened.
 
 | Button | Usage and effect |
 | --- | --- |
 | Refresh | Reload variables; clear the view when disconnected. |
-| Insert | Insert the selected variable's name at the Java REPL cursor and switch to the workbook. Does not execute code. |
+| Insert | Insert the selected variable's name at the Workbook cursor and switch to the workbook. Does not execute code. |
 | Inspect | Open the selected variable's object in Inspector. |
 | Previous / Next | In the current main-window wiring these also open Inspector for the selected variable. Use Inspector's own paging buttons for actual pagination. |
 | Drop | Drop the selected Java declaration and refresh. Does not delete database data or saved DATA snapshots. |
@@ -182,7 +188,7 @@ This is compiler syntax/type analysis, not full business validation or a compreh
 
 ## What is outside this list?
 
-It is not a list of every application local or every Spring bean. For a method-local value use **Debugger > Capture to REPL** or an application capture/tap point. Choose beans through **Java REPL > Insert bean**.
+It is not a list of every application local or every Spring bean. For a method-local value use **Debugger > Capture to REPL** or an application capture/tap point. Choose beans through **Workbook > Insert bean**.
 
 Claude's separate MCP-session variables do not appear here. Save DATA in one session and load it in the other to transfer a value between IDEA and Claude.
 
@@ -238,7 +244,7 @@ Replace `com.example` names with application classes. Add a snapshot-specific Ja
 
 ## Example: reusable input
 
-1. Create an `input` variable in Java REPL or capture one from the debugger.
+1. Create an `input` variable in Workbook or capture one from the debugger.
 2. **Saved > Freeze DATA**: name `cv-input-42`, variable `input`, type your DTO's full name. Accept an empty optional type with OK, not Cancel.
 3. Later, select it and choose **Load**, using variable name `restoredInput`.
 4. Inspect it with **Variables > Refresh > restoredInput > Inspect**.
@@ -316,7 +322,7 @@ Comparison works on saved JSON; it does not restore DTOs or rerun a service call
 
 # 11. Inspector: browsing objects {#inspector}
 
-**Open from:** Java REPL > Inspect result, Variables > Inspect, Tap / Trace > Inspect selected, debugger capture or CASE > Inspect actual. Inspector attaches to the selected live object.
+**Open from:** Workbook > Inspect result, Variables > Inspect, Tap / Trace > Inspect selected, debugger capture or CASE > Inspect actual. Inspector attaches to the selected live object.
 
 | Button / field | Behavior |
 | --- | --- |
@@ -340,7 +346,7 @@ Comparison works on saved JSON; it does not restore DTOs or rerun a service call
 2. In Fields, select `items` and choose Open selected.
 3. Page, select an item and choose Open selected again.
 4. Enter Variable `selectedItem`, then Bind current.
-5. Use `selectedItem` in Java REPL, or Freeze DATA for a persistent sample.
+5. Use `selectedItem` in Workbook, or Freeze DATA for a persistent sample.
 
 Automatic previews read direct fields without rerunning the original expression. Explicit navigation can execute access code, such as a custom collection implementation. After Reset or a context change, open a new value; old handles are invalid.
 
@@ -399,7 +405,7 @@ Chapters 32-34 cover the assertion, parameterization and JUnit-export fields int
 
 ## A small standalone example
 
-Create input and expected values in Java REPL, then Freeze DATA for each:
+Create input and expected values in Workbook, then Freeze DATA for each:
 
 ```java
 var numbers = new java.util.ArrayList<Integer>(
@@ -480,7 +486,7 @@ Capture verifies that the target JVM and REPL session match. It does not resume 
 
 # 16. HTTP: composing a saved request {#http-fields}
 
-**Location:** HTTP. Saved requests are on the left, details on the right and the HTTP console below. Its client sends requests from the IDE process; this alone does not require a JShell connection. Some HTTP form labels are Hungarian in the current UI; their meanings are given below.
+**Location:** Tools > HTTP. Saved requests are on the left, details on the right and the HTTP console below. Its client sends requests from the IDE process; this alone does not require a JShell connection. Some HTTP form labels are Hungarian in the current UI; their meanings are given below.
 
 | Field | Purpose |
 | --- | --- |
@@ -522,13 +528,13 @@ Icon names may appear as tooltips. **Double-clicking a request runs it**, unlike
 | Header törlése | Delete the selected header, or the last row if none is selected. |
 | Mentés | Save the current form. |
 | Play | Save and send the current request. |
-| httpReq.perform snippet | Insert a helper for saved requests and a call for the selected request into Java REPL. Only Run there sends the request. |
+| httpReq.perform snippet | Insert a helper for saved requests and a call for the selected request into Workbook. Only Run there sends the request. |
 
 Changing requests and several other panel actions also save current fields. Use Mentés as an explicit review point. The snippet is generated from the request set; review the inserted code before execution.
 
 ## Reading the console
 
-The console shows method, path, status code, duration, Content-Type and a shortened response. A 2xx status means HTTP success; check business meaning in the body separately. This console is separate from Java REPL's Value / JSON tree.
+The console shows method, path, status code, duration, Content-Type and a shortened response. A 2xx status means HTTP success; check business meaning in the body separately. This console is separate from Workbook's Value / JSON tree.
 
 Connection timeout: **10 seconds**. Request timeout: **30 seconds**. Request and response bodies are limited to **1 MiB**; the console preview is at most 65,536 characters. Rerunning the same request ID requests cancellation of the earlier client-side call without undoing server-side effects.
 
@@ -536,7 +542,7 @@ Connection timeout: **10 seconds**. Request timeout: **30 seconds**. Request and
 
 # 18. AI: from prompt to Java suggestion {#ai}
 
-**Location:** AI. This uses the plugin's own API client. Configure external Claude access separately in MCP.
+**Location:** Tools > AI. This uses the plugin's own API client. Configure external Claude access separately in MCP.
 
 | Field / button | Behavior |
 | --- | --- |
@@ -574,7 +580,7 @@ Columns: **On**, **Alias**, **Fully Qualified Name**. **+ / Add** creates a row,
 
 Add Import / Edit Import contains Alias, Fully qualified name and Enabled. Alias is an organizational label, not a Java `as` alias. Runtime imports use the full class name, such as `java.util.List`, after which code can use `List`.
 
-**Apply with:** Java REPL > Apply configured imports. Editing this table does not remove imports already applied to a live session. The current implementation saves newly created entries as enabled; turn them off in On afterward if needed.
+**Apply with:** Workbook > Apply configured imports. Editing this table does not remove imports already applied to a live session. The current implementation saves newly created entries as enabled; turn them off in On afterward if needed.
 
 ## Settings / Preferences > Spring Boot Debug REPL and MCP
 
@@ -594,13 +600,14 @@ Save with IDEA's **Apply / OK**. Agent settings do not replace the agent in an a
 
 # 20. MCP: local server controls {#mcp}
 
-**Location:** the last main tab. Connect to the running application first. The workbook's MCP action only navigates here.
+**Location:** MCP, the second main tab. Connect to the running application first. The workbook's MCP action only navigates here.
 
 | Control | Function |
 | --- | --- |
 | Start MCP | Start a local HTTP server for the current REPL target, using the selected port and permissions. |
 | Stop MCP | Stop access and close client sessions. The application keeps running. |
-| Port (0 = free) | Zero chooses a free port; another value requests that local port. Locked while running. |
+| Advanced settings… | Show or hide port, execution policy, limits, individual tools and redaction. Hiding the section preserves its settings. |
+| Port (0 = free), under Advanced settings | Zero chooses a free port; another value requests that local port. Locked while running. |
 | Copy client config | Copy JSON containing the URL and private Authorization token. Requires a running server. |
 | Allow Java execution / state changes | Off by default. Main permission for execution and state changes. Reading/analysis tools also depend on their own switches and tool allowlist. |
 | Allow HotSwap | Off by default. Separate permission for code reload; also requires the main execution switch. |
@@ -616,6 +623,8 @@ Save with IDEA's **Apply / OK**. Agent settings do not replace the agent in an a
 | Redact likely secrets in MCP results | On by default. Redacts recognized secret patterns; not complete personal-data detection. |
 | MCP URL | Read-only local address ending in `/mcp`. Give this to the client. |
 | Clients / Last tool | Active client session count and last tool invoked. |
+
+The main MCP screen shows connection controls and permission categories. **Advanced settings…** opens the remaining controls listed above. The complete 82-tool catalog and all existing permission checks remain available.
 
 ## Changing permissions and restarting
 
@@ -747,7 +756,7 @@ These are the plugin's registered defaults. Keymaps and the operating system can
 
 | Action | Shortcut and scope |
 | --- | --- |
-| Run cell / selection | Cmd+Enter or Ctrl+Enter in the Java REPL workbook. |
+| Run cell / selection | Cmd+Enter or Ctrl+Enter in the Workbook workbook. |
 | Run + next | Shift+Enter in the workbook. |
 | Complete | Ctrl+Space in the workbook. |
 | Run Selection | Ctrl+Shift+R for selected code in a normal source editor. |
@@ -761,7 +770,7 @@ Meta means Cmd on macOS. Evaluate at Caret and Reload Class have no separately r
 | Menu item | Action |
 | --- | --- |
 | Run Selection / Evaluate at Caret | Evaluate in the REPL session, not a method's local frame. |
-| Advanced Editor | Show Spring Boot Debug REPL and MCP; choose Java REPL for the workbook. |
+| Advanced Editor | Show Spring Boot Debug REPL and MCP; choose Workbook for the workbook. |
 | Sync Imports | Transfer Java source imports to the session. |
 | Trace Method | Trace the current method. |
 | Record Class Calls… | Record class calls with a graph and source-side input/results; see chapter 39. |
@@ -872,7 +881,7 @@ These 17 tools work with the shared IDE recording. The complete catalog contains
 
 | Symptom | What to check |
 | --- | --- |
-| Not connected / not READY | Application startup log, REPL checkbox and Java REPL status. Bind cannot fix a Spring startup error. |
+| Not connected / not READY | Application startup log, REPL checkbox and Workbook status. Bind cannot fix a Spring startup error. |
 | No active profile | Active profiles or `--spring.profiles.active=...`, not a bare comma-separated argument. |
 | Checkbox missing / old classloader error | Install the fresh ZIP and restart IDEA. Check supported IDE versions and any old custom agent setting. |
 | Local variable unknown | Evaluate at Caret runs in REPL scope. Use a debugger frame or capture for locals. |
@@ -924,7 +933,7 @@ Help (PDF) opens the bundled copy. Install the updated plugin to update its manu
 
 # 28. Execution modes and transactions {#execution-policy}
 
-Below the Java REPL toolbar, the application name, profiles, connection and server-confirmed execution mode are shown. This setting applies to Java and CASE execution in the IDE session. Native sessions default to LIVE. MCP uses an independent policy, defaulting to disabled Java execution and ROLLBACK mode.
+Below the Workbook toolbar, the application name, profiles, connection and server-confirmed execution mode are shown. This setting applies to Java and CASE execution in the IDE session. Native sessions default to LIVE. MCP uses an independent policy, defaulting to disabled Java execution and ROLLBACK mode.
 
 | Control | Usage |
 | --- | --- |
@@ -948,7 +957,7 @@ Transaction semantics follow Spring's programmatic transaction management: docs.
 
 # 29. Reproduction in one bundle {#reproduction}
 
-**Location:** Java REPL > Tools: **Create reproduction**, **Export reproduction**, **Import reproduction**. Creation uses selected DATA input and the last Java execution's code/result. It cannot retrospectively reconstruct arbitrary application calls.
+**Location:** Workbook > Tools: **Create reproduction**, **Export reproduction**, **Import reproduction**. Creation uses selected DATA input and the last Java execution's code/result. It cannot retrospectively reconstruct arbitrary application calls.
 
 1. Save the failing input as DATA through Capture or Saved.
 2. Load it, for example as `input`, and run a reproducing cell. The cell must be self-contained with the selected input and imports; other session variables are not bundled.
@@ -1096,7 +1105,7 @@ See [JUnit 5 documentation](https://docs.junit.org/5.10.2/user-guide/) for param
 
 # 35. Notebook: cell state and dependencies {#notebook-state}
 
-**Location:** Java REPL workbook and Cells result tab; sequence execution is in Run. Existing `.jsh` files and `// %%` boundaries remain supported.
+**Location:** Workbook workbook and Cells result tab; sequence execution is in Run. Existing `.jsh` files and `// %%` boundaries remain supported.
 
 **Results at the cell:** each cell shows execution number, status, duration and short output underneath. Stale indicators name the changed input cell when known. Click the run marker in the left gutter for cell actions.
 
@@ -1138,7 +1147,7 @@ Sequences stop at the first error, edit, connection change or Interrupt. Effects
 
 # 36. Saving and opening a workspace {#workspace-save}
 
-**Location:** Java REPL > Workspace; Save workspace also has a primary icon. A `.sbrepl-workspace` is a checksummed ZIP, not an executable package. **Open workbook** still opens only `.jsh`/text.
+**Location:** Workbook > Workspace; Save workspace also has a primary icon. A `.sbrepl-workspace` is a checksummed ZIP, not an executable package. **Open workbook** still opens only `.jsh`/text.
 
 | Button | Contents or action |
 | --- | --- |
@@ -1186,7 +1195,9 @@ Claude tools: **repl_snapshot_versions**, **repl_snapshot_provenance**, **repl_s
 3. Select expression `order`, then right-click > Spring Boot Debug REPL and MCP > **Snapshot point…**. The gutter context menu also offers it; verify the expression there.
 4. Enter a snapshot name such as `order-input`. **Java expression** is evaluated in that line's local frame. Java type is optional; provide the full generic type for a list if needed. **Capture attempts** defaults to 1, maximum 100.
 5. Save to place a purple snapshot marker in the gutter, then trigger the application request.
-6. Before the line executes, the debugger records the value and resumes the application. The Debug console reports success/failure. Find the snapshot in **Snapshots > Saved** and load it into the REPL.
+6. Before the line executes, the debugger records the value and resumes the application. The Debug console reports success/failure. Open **Tools > Snapshots > Saved**, click **Refresh** if it was already open, and load the snapshot into the REPL.
+
+The purple dot marks a configured point; placing or clicking it does not save a value immediately. A later application call must reach that line. After upgrading, restart IDEA and the Debug application. The 0.25.0 release connects this custom point to the Java debugger, fixing earlier markers that could appear without capturing.
 
 ## Managing the point
 
@@ -1559,7 +1570,7 @@ Example: freeze an order, make copies with quantity 0, 1 and 100, then build a t
 
 # 45. Bean Explorer {#bean-explorer}
 
-**Location:** the **Beans** main tab, after MCP. **Java REPL > Tools > Bean explorer** opens it. This is distinct from Insert bean, which remains a quick declaration helper.
+**Location:** Tools > Beans. **Workbook > Tools > Bean explorer** opens it. This is distinct from Insert bean, which remains a quick declaration helper.
 
 | Control | Purpose |
 | --- | --- |
@@ -1576,7 +1587,7 @@ Review the generated code, use Check code, then run it explicitly. This last ste
 
 # 46. Watches and field changes {#watches}
 
-**Location:** Java REPL's result area > **Watches**. **Watch result** opens the pin dialog with `last1`; Pin watch can use another session variable.
+**Location:** Workbook's result area > **Watches**. **Watch result** opens the pin dialog with `last1`; Pin watch can use another session variable.
 
 | Control / tab | Meaning |
 | --- | --- |
@@ -1659,3 +1670,55 @@ With MCP 2025-11-25, eval, CASE run/batch, reload and watch refresh accept an op
 At most 20 tasks are retained per session. TTL is bounded and reported by the server; results are in memory and expire with the session/server. A transport failure retains the task's failure report but disables further execution on that session. Never resubmit an uncertain operation automatically. Normal synchronous tool calls remain available for clients without task support; actual support depends on the MCP host.
 
 [MCP tasks specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks) describes this experimental protocol facility. [MCP resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) and [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) define subscription and transport behavior.
+
+# 50. Data handling and font licenses {#data-handling}
+
+The plugin does not send telemetry, source code or runtime values to the publisher. Local workspaces and snapshots can contain application data. The optional AI panel sends the exact reviewed prompt to the configured provider only after **Send reviewed prompt**. An authenticated local MCP client can read permitted runtime data and may forward it to its own provider.
+
+Workbook recovery checkpoints are in the IDE system directory under `java-repl-workspaces`. Persistent snapshots are in the application's `~/.java-repl-snapshots`; redacted audit logs are in `~/.java-repl-audit` unless overridden. Snapshot and workspace contents have no automatic expiry. Uninstalling the plugin does not automatically delete those files or PasswordSafe entries.
+
+Use **Tools > Snapshots > Saved > Delete** to delete a snapshot and its versions. **Workbook > Workspace > Clear history** clears snippet history. Delete exported files and recovery/audit folders manually after closing the project and application when you want to remove those retained copies. Removing secrets from IDE PasswordSafe invalidates dependent client configurations. [The complete data-handling document](https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/blob/jetbrains-idea-plugin/PRIVACY.md) covers retention, sharing and contact details.
+
+## Embedded handbook fonts
+
+These PDFs use DejaVu Sans, Sans Bold and Sans Mono subset fonts. Their complete notices and permissions follow. Other bundled third-party terms are retained in their original JARs and summarized in THIRD-PARTY-NOTICES.txt.
+
+The following software may be included in this product: Deja Vu fonts. Use of any of this software is governed by the terms of the license below:
+
+Fonts are (c) Bitstream (see below). DejaVu changes are in public domain. Glyphs imported from Arev fonts are (c) Tavmjong Bah (see below)
+
+### Bitstream Vera Fonts Copyright
+
+Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the fonts accompanying this license ("Fonts") and associated documentation files (the "Font Software"), to reproduce and distribute the Font Software, including without limitation the rights to use, copy, merge, publish, distribute, and/or sell copies of the Font Software, and to permit persons to whom the Font Software is furnished to do so, subject to the following conditions:
+
+The above copyright and trademark notices and this permission notice shall be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular the designs of glyphs or characters in the Fonts may be modified and additional glyphs or characters may be added to the Fonts, only if the fonts are renamed to names not containing either the words "Bitstream" or the word "Vera".
+
+This License becomes null and void to the extent applicable to Fonts or Font Software that has been modified and is distributed under the "Bitstream Vera" names.
+
+The Font Software may be sold as part of a larger software package but no copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL BITSTREAM OR THE GNOME FOUNDATION BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+
+Except as contained in this notice, the names of Gnome, the Gnome Foundation, and Bitstream Inc., shall not be used in advertising or otherwise to promote the sale, use or other dealings in this Font Software without prior written authorization from the Gnome Foundation or Bitstream Inc., respectively. For further information, contact: fonts at gnome dot org.
+
+### Arev Fonts Copyright
+
+Copyright (c) 2006 by Tavmjong Bah. All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the fonts accompanying this license ("Fonts") and associated documentation files (the "Font Software"), to reproduce and distribute the modifications to the Bitstream Vera Font Software, including without limitation the rights to use, copy, merge, publish, distribute, and/or sell copies of the Font Software, and to permit persons to whom the Font Software is furnished to do so, subject to the following conditions:
+
+The above copyright and trademark notices and this permission notice shall be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular the designs of glyphs or characters in the Fonts may be modified and additional glyphs or characters may be added to the Fonts, only if the fonts are renamed to names not containing either the words "Tavmjong Bah" or the word "Arev".
+
+This License becomes null and void to the extent applicable to Fonts or Font Software that has been modified and is distributed under the "Tavmjong Bah Arev" names.
+
+The Font Software may be sold as part of a larger software package but no copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL TAVMJONG BAH BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+
+Except as contained in this notice, the name of Tavmjong Bah shall not be used in advertising or otherwise to promote the sale, use or other dealings in this Font Software without prior written authorization from Tavmjong Bah. For further information, contact: tavmjong @ free . fr.

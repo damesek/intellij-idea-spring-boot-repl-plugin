@@ -48,7 +48,7 @@ python3 scripts/check-repository.py
 ./gradlew verifyPlugin -PtestJdk=21
 ./gradlew verifyPlugin -PtestJdk=21 -PverifyPreviousIdes=true
 mvn -B -f sb-repl-agent/pom.xml package -Dgpg.skip=true
-python3 scripts/check-agent-package.py sb-repl-agent/target/sb-repl-agent-0.24.1.jar
+python3 scripts/check-agent-package.py sb-repl-agent/target/sb-repl-agent-0.25.0.jar
 mvn -B -f sb-repl-bridge/pom.xml package -Dgpg.skip=true
 ```
 
@@ -58,9 +58,11 @@ Supported IDEA build range: `241.0–252.*`. Compilation uses IC 2024.1.4; the t
 
 ## Documentation and release ownership
 
+The interface has three primary tabs: Workbook, MCP and Tools. Use `ReplTabs.showPanel` to open a supporting panel; do not navigate by old main-tab indices. Custom source snapshot points require the registered `debugger.javaBreakpointHandlerFactory` as well as their breakpoint type.
+
 Keep the README focused on user value and getting started. Feature details belong in the [handbooks](README.md); old increment reports belong in [history](history/README.md). Only runtime resources from `src/main/resources/` and the generated agent go into the plugin. Repository documentation and screenshots are not classpath resources.
 
-To update the offline manuals, edit `docs/repl-help-en.md` and `docs/repl-help-hu.md`, then run `python3 scripts/build-help-pdf.py` with ReportLab and supported TTF fonts. Review the changed PDF pages before committing all four PDF copies and both source hashes. Normal builds reject stale or mismatched copies.
+To update the offline manuals, edit `docs/repl-help-en.md` and `docs/repl-help-hu.md`, then run `python3 scripts/build-help-pdf.py` with ReportLab and DejaVu Sans/Mono TTF fonts (`--font-dir` may select their directory). Review the changed PDF pages before committing all four PDF copies and both source hashes. Normal builds reject stale or mismatched copies.
 
 The root Gradle version is the source of truth for Gradle modules. Update both Maven POM versions together; `verifyModuleVersions` prevents drift. Release tags must match `v<version>`; the repository checker validates this in tag-triggered CI. Rebuild the handbooks after a version change.
 

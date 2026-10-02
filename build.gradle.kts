@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.24.1"
+version = "0.25.0"
 
 repositories {
     mavenCentral()
@@ -116,6 +116,7 @@ val verifyBundledHelp by tasks.registering {
 
 tasks.processResources {
     dependsOn(copyDevRuntimeAgent, verifyBundledHelp)
+    from(listOf("LICENSE", "PRIVACY.md", "THIRD-PARTY-NOTICES.txt")) { into("META-INF") }
 }
 
 intellijPlatform {
@@ -126,14 +127,14 @@ intellijPlatform {
         vendor {
             name = "Baader"
         }
-        description = """
-            Java REPL for a running Spring Boot application.
-            Enable Spring Boot Debug REPL and MCP in an existing Spring Boot or Java Application run configuration.
-            The bundled agent starts on loopback, publishes a private endpoint and binds the ready Spring context.
-            Evaluate Java snippets with persistent imports and definitions; inspect real values and use LIVE, DATA or RECIPE snapshots.
-            Workbook saving never executes code. HTTP and reviewed AI requests are optional.
-        """.trimIndent()
         changeNotes = """
+            <p>0.25.0</p>
+            <ul>
+              <li>Focus the interface on Workbook and MCP; keep all supporting panels in Tools.</li>
+              <li>Keep the complete 82-tool MCP catalog and permissions; reveal advanced settings on demand.</li>
+              <li>Connect purple source snapshot points to the Java debugger so they can save DATA when hit.</li>
+              <li>Refresh both offline manuals, the scalable icon and data-handling documentation.</li>
+            </ul>
             <p>0.24.1</p>
             <ul>
               <li>Remember the MCP listening port per project and retain its access token in IDE PasswordSafe.</li>

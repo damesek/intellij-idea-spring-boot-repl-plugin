@@ -33,6 +33,8 @@ internal class McpPanel(
     private val resultLimit = JSpinner(SpinnerNumberModel(65536, 1024, 65536, 1024))
     private val redact = JCheckBox("Redact likely secrets in MCP results", true)
     private val toolsButton = JButton("Choose allowed tools")
+    private val advancedButton = JButton("Advanced settings…")
+    private val advanced = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS); isVisible = false; alignmentX = LEFT_ALIGNMENT }
     private var allowedTools: Set<String>? = null
     private val status = JTextArea(2, 0).apply {
         isEditable = false; isOpaque = false; lineWrap = true; wrapStyleWord = true
@@ -47,53 +49,54 @@ internal class McpPanel(
         val controls = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
         controls.add(WorkbookToolbar().apply {
             alignmentX = LEFT_ALIGNMENT
-            add(start); add(stop); add(JLabel("Port (0 = free):")); add(port); add(copyConfig)
+            add(start); add(stop); add(copyConfig)
         })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(execution); add(reload) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(snapshotWrites); add(snapshotDelete) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(caseRuns); add(captureChanges) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(recordingAccess) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("Java / CASE mode:")); add(executionMode); add(JLabel("Transaction manager:")); add(transactionManager) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("Timeout ms:")); add(timeout); add(JLabel("Calls / session:")); add(quota); add(JLabel("Result chars:")); add(resultLimit) })
-        controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(toolsButton); add(redact) })
         controls.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("MCP URL:")); add(endpoint) })
         controls.add(status); controls.add(clients)
         add(controls, BorderLayout.NORTH)
-        add(JScrollPane(JTextArea("""
-            1. Start or connect your application in Java REPL.
+        fun explanation(text: String, rows: Int) = JTextArea(text, rows, 0).apply {
+            isEditable = false; isOpaque = false; lineWrap = true; wrapStyleWord = true
+            font = UIManager.getFont("Label.font"); alignmentX = LEFT_ALIGNMENT
+            maximumSize = java.awt.Dimension(Int.MAX_VALUE, preferredSize.height)
+        }
+        val settings = object : JPanel(), Scrollable {
+            override fun getPreferredScrollableViewportSize() = preferredSize
+            override fun getScrollableTracksViewportWidth() = true
+            override fun getScrollableTracksViewportHeight() = false
+            override fun getScrollableUnitIncrement(visible: java.awt.Rectangle, orientation: Int, direction: Int) = 16
+            override fun getScrollableBlockIncrement(visible: java.awt.Rectangle, orientation: Int, direction: Int) = 160
+        }.apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
+        settings.add(explanation("""
+            1. Start or connect your application in Workbook.
             2. Click Start MCP, then Copy client config.
-            3. Add the URL and Authorization header to a local AI client's Streamable HTTP MCP settings.
+            3. Add the copied URL and Authorization header to your local MCP client.
 
-            Each client gets a separate persistent REPL session. The AI can check code, evaluate Java,
-            inspect results, work with snapshots, arm capture triggers and run saved cases.
-            Share IDE recordings exposes the current graph, captured values/source and comparisons to all allowed clients.
-            Reading these frozen values does not execute Java. Start/stop also need capture/trace and state-change permissions.
-            Select opens the call in your editor and needs state-change permission. Each client keeps its own reference pin.
-            The shared recording remains in the IDE when a client closes. Opening a saved recording in the IDE makes it readable here.
-            The default is read-only API access. Each write category and individual tool can be enabled separately.
-            Java and CASE execution use the mode, manager and timeout selected above, independently of the workbook.
-            When several transaction managers exist, enter the exact manager bean name. Missing managers stop execution.
-            Both ROLLBACK and READ_ONLY always roll back their participating synchronous database work.
-            Read-only is a driver hint. Independent transactions and async work are not covered.
-            Change permissions while stopped, then start again. The port and token are remembered for this project.
-            Choose port 0 to allocate a new port; copy the config again if the URL changes.
-            The token is stored in IDE PasswordSafe according to your password storage settings.
-
-            These are tool permissions, not a Java sandbox: arbitrary Java can access the whole target JVM.
-            Do not grant Java execution to an untrusted client. It can bypass narrower tool restrictions.
-            Secret redaction uses heuristics and cannot detect all personal data or disguised credentials.
-            Redacted audit logs are saved under ~/.java-repl-audit (4 MiB rotation, 5 retained files per channel).
-
-            Spring beans, application effects and DATA snapshots are shared. Closing an MCP session discards
-            its variables and LIVE pins. It does not undo application or database changes.
-            Check result truncation flags; large snapshots stay in the app and can be exported from the IDE.
-
-            The server listens on 127.0.0.1 only. A new private access token is generated on every start.
-            Copy config includes that token. Up to 4 clients; sessions expire after 30 idle minutes.
-            Stop MCP, REPL disconnect or project close ends access. No code is replayed automatically.
-            Protocol details and examples are in Help (PDF) and the MCP guide.
-            Remote/cloud-only clients cannot reach this local endpoint directly.
-        """.trimIndent()).apply { isEditable = false; lineWrap = true; wrapStyleWord = true; isOpaque = false }).apply { border = null }, BorderLayout.CENTER)
+            All ${McpTools.all.size} tools remain available according to the permissions below.
+            Java execution and changes are disabled by default. Stop MCP before changing permissions.
+        """.trimIndent(), 7))
+        settings.add(JLabel("Client permissions").apply { alignmentX = LEFT_ALIGNMENT })
+        settings.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(execution); add(reload) })
+        settings.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(snapshotWrites); add(snapshotDelete) })
+        settings.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(caseRuns); add(captureChanges) })
+        settings.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(recordingAccess) })
+        settings.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(advancedButton) })
+        advanced.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("Port (0 = free):")); add(port) })
+        advanced.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("Java / CASE mode:")); add(executionMode); add(JLabel("Transaction manager:")); add(transactionManager) })
+        advanced.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(JLabel("Timeout ms:")); add(timeout); add(JLabel("Calls / session:")); add(quota); add(JLabel("Result chars:")); add(resultLimit) })
+        advanced.add(WorkbookToolbar().apply { alignmentX = LEFT_ALIGNMENT; add(toolsButton); add(redact) })
+        advanced.add(explanation("ROLLBACK and READ_ONLY roll back participating synchronous database work. They do not undo external calls, independent transactions or async work. Java execution can change the whole application. Redaction cannot detect every secret.", 4))
+        settings.add(advanced)
+        settings.add(explanation("""
+            Each client has its own REPL session. Application state and DATA snapshots are shared.
+            The local port and private token are remembered for this project; the token is kept in IDE PasswordSafe.
+            Help (PDF), chapter 20, explains permissions, client setup and advanced settings.
+        """.trimIndent(), 5))
+        add(JScrollPane(settings).apply { border = null }, BorderLayout.CENTER)
+        advancedButton.addActionListener {
+            advanced.isVisible = !advanced.isVisible
+            advancedButton.text = if (advanced.isVisible) "Hide advanced settings" else "Advanced settings…"
+            revalidate(); repaint()
+        }
         start.addActionListener {
             try {
                 port.commitEdit(); timeout.commitEdit(); quota.commitEdit(); resultLimit.commitEdit()

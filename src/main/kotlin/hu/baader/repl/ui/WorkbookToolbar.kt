@@ -25,6 +25,8 @@ class WorkbookToolbar : JPanel(object : FlowLayout(LEFT, 4, 2) {
             height + rowHeight + insets.top + insets.bottom + 2 * vgap)
     }
 }) {
+    override fun getMaximumSize() = Dimension(Int.MAX_VALUE, preferredSize.height)
+
     init { addComponentListener(object : ComponentAdapter() {
         override fun componentResized(e: ComponentEvent) { parent?.revalidate() }
     }) }

@@ -91,7 +91,7 @@ class SnapshotPointAction : AnAction("Snapshot point…") {
             item(JLabel("Snapshot name · an existing name creates a new version").apply { labelFor = destination }); item(destination)
             item(JLabel("Declared Java type (optional)").apply { labelFor = declaredType }); item(declaredType)
             item(JLabel("Capture attempts per application JVM (including serialization failures)").apply { labelFor = count }); item(count)
-            item(JTextArea("Requires Debug + Enable Spring Boot Debug REPL and MCP. Captures before this line executes. Serialization briefly runs on the hit thread; the debugger then continues. Prefer a variable over a method call.", 3, 56).apply {
+            item(JTextArea("Requires Debug + Enable Spring Boot Debug REPL and MCP. After saving, trigger an application call that reaches this line. The Debug console reports the result; open Tools > Snapshots > Saved and Refresh. Captures before the line executes; prefer an initialized variable over a method call.", 4, 56).apply {
                 isEditable = false; lineWrap = true; wrapStyleWord = true; isOpaque = false
             })
         }

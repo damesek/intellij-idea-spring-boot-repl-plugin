@@ -8,10 +8,16 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.xdebugger.XDebuggerUtil
 import com.intellij.xdebugger.breakpoints.SuspendPolicy
+import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.engine.JavaBreakpointHandlerFactory
+import com.intellij.debugger.ui.breakpoints.BreakpointManager
+import com.intellij.debugger.ui.breakpoints.LineBreakpoint
 import hu.baader.repl.actions.WorkbenchCatalog
+import hu.baader.repl.debug.SnapshotBreakpointHandlerFactory
 import hu.baader.repl.debug.SnapshotBreakpointType
 import hu.baader.repl.debug.SnapshotPointSpec
 import hu.baader.repl.nrepl.NreplService
+import hu.baader.repl.ui.ReplTabs
 import hu.baader.repl.workspace.WorkspaceStore
 
 class WorkbenchIdeTest : BasePlatformTestCase() {
@@ -24,9 +30,26 @@ class WorkbenchIdeTest : BasePlatformTestCase() {
         try {
             hu.baader.repl.ui.JavaReplToolWindowFactory().createToolWindowContent(project, window)
             val component = window.contentManager.contents.first { it !in before }.component
+            val tabs = component as ReplTabs
+            assertEquals(listOf("Workbook", "MCP", "Tools"), (0 until tabs.tabCount).map(tabs::getTitleAt))
+            val tools = tabs.getComponentAt(2) as javax.swing.JTabbedPane
+            assertEquals(listOf("Variables", "Snapshots", "Inspector", "Tap / Trace", "Cases / Reload", "Debugger", "HTTP", "AI", "Imports", "Beans"),
+                (0 until tools.tabCount).map(tools::getTitleAt))
             val commands = hu.baader.repl.actions.WorkbenchActions.get(project)
             assertNull(commands.reason(WorkbenchCatalog.byKey("SaveWorkspace")!!))
             assertNotNull(commands.reason(WorkbenchCatalog.byKey("RunCell")!!))
+            commands.perform("MCP")
+            assertEquals("MCP", tabs.getTitleAt(tabs.selectedIndex))
+            commands.inspect(mapOf("handle" to "test-result"))
+            assertSame(tools, tabs.selectedComponent)
+            assertEquals("Inspector", tools.getTitleAt(tools.selectedIndex))
+            for (index in 0 until tools.tabCount) {
+                val panel = tools.getComponentAt(index)
+                tabs.showPanel(panel)
+                assertSame(panel, tabs.activePanel)
+                assertSame(tools, tabs.selectedComponent)
+            }
+            tabs.selectedIndex = 0
             fun layout(root: java.awt.Container) { root.doLayout(); root.components.filterIsInstance<java.awt.Container>().forEach(::layout) }
             fun components(root: java.awt.Container): List<java.awt.Component> = root.components.flatMap {
                 listOf(it) + if (it is java.awt.Container) components(it) else emptyList()
@@ -37,7 +60,9 @@ class WorkbenchIdeTest : BasePlatformTestCase() {
             assertTrue("The workbench toolbar must display its actions", toolbar.hasVisibleActions())
             assertEquals(4, toolbar.components.filterIsInstance<com.intellij.openapi.actionSystem.impl.ActionButtonWithText>().size)
             toolbar.alphaContext.animator.setVisibleImmediately(true)
-            for (width in listOf(1100, 700)) {
+            for (primary in listOf("Workbook", "MCP", "Tools")) for (width in listOf(1100, 700)) {
+                tabs.selectedIndex = tabs.indexOfTab(primary)
+                if (primary == "Tools") tabs.showTool("Snapshots")
                 component.setSize(width, 800); repeat(8) { layout(component) }
                 com.intellij.testFramework.PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
                 repeat(3) { layout(component) }
@@ -45,14 +70,45 @@ class WorkbenchIdeTest : BasePlatformTestCase() {
                     editor.inlayModel.getBlockElementsInRange(0, editor.document.textLength).forEach { it.update() }
                 }
                 System.getProperty("sb.repl.uiRenderDir")?.let { directory ->
-                    java.nio.file.Files.writeString(java.nio.file.Path.of(directory, "Workbench-$width-layout.txt"), components(component).joinToString("\n") { "${it.javaClass.name}: ${it.bounds}, visible=${it.isVisible}" })
+                    java.nio.file.Files.createDirectories(java.nio.file.Path.of(directory))
+                    java.nio.file.Files.writeString(java.nio.file.Path.of(directory, "$primary-$width-layout.txt"), components(component).joinToString("\n") { "${it.javaClass.name}: ${it.bounds}, visible=${it.isVisible}" })
                 }
                 val image = java.awt.image.BufferedImage(width, 800, java.awt.image.BufferedImage.TYPE_INT_RGB)
                 val graphics = image.createGraphics()
                 try { component.printAll(graphics) } finally { graphics.dispose() }
-                System.getProperty("sb.repl.uiRenderDir")?.let { directory -> javax.imageio.ImageIO.write(image, "png", java.nio.file.Path.of(directory, "Workbench-$width.png").toFile()) }
+                System.getProperty("sb.repl.uiRenderDir")?.let { directory -> javax.imageio.ImageIO.write(image, "png", java.nio.file.Path.of(directory, "$primary-$width.png").toFile()) }
             }
         } finally { manager.unregisterToolWindow("Spring Boot REPL"); com.intellij.openapi.util.IconLoader.deactivate() }
+    }
+    fun testSnapshotPointHasRegisteredJavaDebuggerHandlerAndPreservesCaptureExpressions() {
+        val factory = JavaBreakpointHandlerFactory.EP_NAME.extensionList.filterIsInstance<SnapshotBreakpointHandlerFactory>().single()
+        val process = object : DebugProcessImpl(project) {}
+        try {
+            val handler = factory.createHandler(process)
+            assertEquals(SnapshotBreakpointType::class.java, handler.breakpointTypeClass)
+            val type = XDebuggerUtil.getInstance().findBreakpointType(SnapshotBreakpointType::class.java)
+            val file = myFixture.addFileToProject("Capture.java", "class Capture {\n void run(String input) {\n  System.out.println(input);\n }\n}")
+            val manager = XDebuggerManager.getInstance(project).breakpointManager
+            WriteCommandAction.runWriteCommandAction(project) {
+                val point = manager.addLineBreakpoint(type, file.virtualFile.url, 2, type.createBreakpointProperties(file.virtualFile, 2))
+                try {
+                    val spec = SnapshotPointSpec("capturedInput", "input")
+                    val util = XDebuggerUtil.getInstance()
+                    point.suspendPolicy = SuspendPolicy.NONE
+                    point.conditionExpression = util.createExpression(spec.condition(), null, null, com.intellij.xdebugger.evaluation.EvaluationMode.EXPRESSION)
+                    point.logExpressionObject = util.createExpression(spec.logExpression(), null, null, com.intellij.xdebugger.evaluation.EvaluationMode.EXPRESSION)
+                    handler.registerBreakpoint(point)
+                    val adapter = BreakpointManager.getJavaBreakpoint(point) as? LineBreakpoint<*>
+                    assertNotNull("The snapshot marker must be adapted into a Java line breakpoint", adapter)
+                    assertSame(point, adapter!!.xBreakpoint)
+                    assertEquals(2, adapter.lineIndex)
+                    assertTrue(adapter.isValid)
+                    assertEquals(SuspendPolicy.NONE, adapter.xBreakpoint.suspendPolicy)
+                    assertEquals(spec.condition(), adapter.xBreakpoint.conditionExpression?.expression)
+                    assertEquals(spec, SnapshotPointSpec.read(adapter.xBreakpoint.logExpressionObject?.expression))
+                } finally { manager.removeBreakpoint(point) }
+            }
+        } finally { process.dispose() }
     }
     fun testActionsAndSnapshotBreakpointLoadFromPluginDescriptor() {
         for (command in WorkbenchCatalog.commands) assertNotNull("Missing Find Action entry: ${command.key}", ActionManager.getInstance().getAction(WorkbenchCatalog.id(command.key)))

@@ -8,11 +8,11 @@ Fülek, gombok, mezők és munkafolyamatok az IntelliJ IDEA pluginhoz. Java-kís
 
 **Mit ad a REPL?** A futó Java-alkalmazás saját osztályaival és Spring beanjeivel dolgozhatsz. A session megőrzi az importokat, változókat és metódusokat. Egy eredményt többször megvizsgálhatsz, majd célzott DATA snapshotként elmenthetsz.
 
-**A kézikönyv alapja:** a {{version}} forrásában ténylegesen bekötött 12 fő fül, az alfüleik, gombjaik és beállításaik. A gombfeliratokat eredeti formában adjuk meg. Az IDEA témája, keymapje és ablakmérete módosíthatja az elhelyezést. A felépítési ábra szemléltetés, nem élő képernyőkép.
+**A kézikönyv alapja:** a {{version}} forrásában ténylegesen bekötött három fő fül (Workbook, MCP, Tools), mind a tíz kiegészítő Tools-panel, az alfüleik, gombjaik és beállításaik. A gombfeliratokat eredeti formában adjuk meg. Az IDEA témája, keymapje és ablakmérete módosíthatja az elhelyezést. A felépítési ábra szemléltetés, nem élő képernyőkép.
 
-**Dokumentum frissítése:** 2026. szeptember 17. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is. Az angol kiadás ugyanezt a funkciókört mutatja be.
+**Dokumentum frissítése:** 2026. október 2. Ez a korábbi rövid magyar PDF kibővített változata; tartalmazza a Claude/MCP útmutató lényeges lépéseit is. Az angol kiadás ugyanezt a funkciókört mutatja be.
 
-**Elérési út az IDE-ben:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > Magyar vagy English. A Java-forrás helyi menüje ugyanezt kínálja. A Java REPL > Tools > Help (PDF) nyelvválasztót nyit. Mindkét kézikönyv a plugin része, offline is elérhető.
+**Elérési út az IDE-ben:** Code > Spring Boot Debug REPL and MCP > Help (PDF) > Magyar vagy English. A Java-forrás helyi menüje ugyanezt kínálja. A Workbook > Tools > Help (PDF) nyelvválasztót nyit. Mindkét kézikönyv a plugin része, offline is elérhető.
 
 {{cover-summary}}
 
@@ -35,7 +35,7 @@ A fejezetcímekre kattintva közvetlenül a megfelelő oldalra léphetsz. A PDF-
 ```
 
 4. Indítsd az alkalmazást **Run** vagy **Debug** módban. A debuggerfunkciókhoz Debug kell; a sima REPL-hez Run is elég.
-5. Nyisd meg a **Spring Boot Debug REPL and MCP** tool window-t, és várd meg a **READY** állapotot. A Java REPL fülön futtasd:
+5. Nyisd meg a **Spring Boot Debug REPL and MCP** tool window-t, és várd meg a **READY** állapotot. A Workbook fülön futtasd:
 
 ```java
 ctx.getBeanDefinitionCount()
@@ -61,30 +61,36 @@ A checkboxos indítás a plugin beépített agentjét használja; nem kell kül�
 
 # 02. A felület térképe {#ui-map}
 
-A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön négy fő ikon és négy műveletmenü hagy több helyet a kódnak. Szűk ablakban a fülsor több sorba kerülhet; a kód és az eredmény közti osztó húzható.
+A három fő fül: **Workbook**, **MCP**, **Tools**. Java-cellákhoz a Workbookot, AI-klienshez az MCP-t válaszd. A Tools bal oldali listája tartalmazza a kiegészítő paneleket. Minden funkció és MCP-eszköz megmaradt.
 
-| Fül | Mire való? |
+| Fő fül | Feladat |
 | --- | --- |
-| Java REPL | Kapcsolat, Java-munkafüzet, futtatás, ellenőrzés és eredmény. |
-| Variables | A saját IDE-session változóinak listája, beillesztése és inspectálása. |
-| Snapshots | Saved, Capture next és Compare alfülek; tartós adatok és capture-szabályok. |
-| Inspector | Valódi objektumok navigálható böngészője; Value és Fields alfül. |
+| Workbook | Kapcsolat, Java-cellák, futtatás, ellenőrzés és eredmény. |
+| MCP | Helyi MCP-kiszolgáló, klienskonfiguráció és jogosultságok. A haladó beállítások szükség esetén nyithatók ki. |
+| Tools | Változók, snapshotok, objektumböngészés és az alábbi kiegészítő munkafolyamatok. |
+
+| Tools-panel | Feladat |
+| --- | --- |
+| Variables | Az IDE-session változóinak listázása, beillesztése és vizsgálata. |
+| Snapshots | Saved, Capture next, Compare és Versions: tartós adatok, capture-szabályok. |
+| Inspector | Valódi objektumok böngészése a Value és Fields alfüleken. |
 | Tap / Trace | Alkalmazásértékek megfigyelése és metódushívások követése. |
 | Cases / Reload | Snapshotból mentett próba, elvárt eredmény, ismételt futtatás és HotSwap. |
 | Debugger | Az IDEA aktuális debug-sessionjének kezelése, lokális érték átvétele. |
 | HTTP | Mentett HTTP-kérések összeállítása, futtatása és snippetgenerálás. |
-| AI | Áttekinthető prompt küldése a beállított API-nak; kódjavaslat készítése. |
-| Imports | Mentett importbeállítások; utólag alkalmazhatók a sessionre. |
-| MCP | Helyi MCP-kiszolgáló külső AI-klienseknek, például Claude-nak. |
+| AI | Ellenőrzött prompt küldése a beállított API-nak, kódjavaslat készítése. |
+| Imports | Mentett importok alkalmazása a sessionre. |
 | Beans | Beandefiníciók, függőségek, proxy-metaadatok és hívás-előkészítés. |
+
+A további fejezetek a panelneveket használják: **Snapshots > Saved** a teljes **Tools > Snapshots > Saved** út rövidítése. A **Workbook > Tools** a munkafüzet műveletmenüje, külön a Tools fő fültől. A Workbook négy fő ikont és négy műveletmenüt tartalmaz; a kód és az eredmény közti osztó húzható.
 
 {{ui-map}}
 
 **Eredmény:** Value > Tree / Formatted / Raw: érték; Output / errors: kimenet és hibák; Cells: cellafutások; Watches: rögzített megfigyelések. **Inspector:** Value: strukturált érték; Fields: élő objektumnavigáció.
 
-# 03. Java REPL: kapcsolat és futtatás {#repl-controls}
+# 03. Workbook: kapcsolat és futtatás {#repl-controls}
 
-**Hely:** Java REPL, felső eszköztár. A négy fő ikon: **Connect**, **Run cell / selection**, **Interrupt**, **Save workspace**. Az ikon fölé vitt egér megmutatja a nevét. A mellettük levő **Run**, **Workspace**, **Session**, **Tools** menü tartalmazza a részletes műveleteket. A Connect egy ismert vagy a Settingsben kiválasztott endpointhoz kapcsolódik; nem indít Spring-alkalmazást.
+**Hely:** Workbook, felső eszköztár. A négy fő ikon: **Connect**, **Run cell / selection**, **Interrupt**, **Save workspace**. Az ikon fölé vitt egér megmutatja a nevét. A mellettük levő **Run**, **Workspace**, **Session**, **Tools** menü tartalmazza a részletes műveleteket. A Connect egy ismert vagy a Settingsben kiválasztott endpointhoz kapcsolódik; nem indít Spring-alkalmazást.
 
 **Hol találom?** Run: cellák futtatása és függőségvizsgálat. Workspace: munkafüzet, mentés, history. Session: kapcsolat, Bind, Reset és Execution settings. Tools: ellenőrzés, beanek, importok, reprodukció, audit, PDF és MCP. A részletes hiba és transcript alul marad; az alkalmazás/profil és a tényleges futtatási mód felül látszik.
 
@@ -105,9 +111,9 @@ A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön
 | Help (PDF) | Magyar vagy angol offline kézikönyvet választhatsz. Nincs szükség REPL-kapcsolatra. |
 | MCP | Átvált az MCP fülre. Önmagában nem indít MCP-szervert. |
 
-# 04. Java REPL: a munkafüzet gombjai {#workbook}
+# 04. Workbook: a munkafüzet gombjai {#workbook}
 
-**Hely:** Java REPL > Workspace menü; az Insert bean és Apply configured imports a Tools menüben van. A forrás és az élő session állapota eltérhet; a 35. fejezet a cellaállapotot és a Run menüt, a 36. a workspace-műveleteket részletezi.
+**Hely:** Workbook > Workspace menü; az Insert bean és Apply configured imports a Tools menüben van. A forrás és az élő session állapota eltérhet; a 35. fejezet a cellaállapotot és a Run menüt, a 36. a workspace-műveleteket részletezi.
 
 | Gomb | Hatás |
 | --- | --- |
@@ -116,7 +122,7 @@ A fő fülek balról jobbra ebben a sorrendben találhatók. A Java REPL fülön
 | Save workbook | `.jsh` fájlba menti az aktuális szöveget. Nem menti a Java-objektumokat. |
 | Save RECIPE | A kijelölést, ennek hiányában a teljes munkafüzetet névvel a runtime tárába menti. Nem futtat. |
 | History | Az utolsó legfeljebb 100 snippetből választhatsz; a kiválasztott kódot a kurzorhoz illeszti. |
-| Clear history | Törli az előzménylistát és a Java REPL alsó transcriptjét. Nem dobja el a változókat. |
+| Clear history | Törli az előzménylistát és a Workbook alsó transcriptjét. Nem dobja el a változókat. |
 | Insert bean | Bean-nevet/típust választasz, opcionális publikus típust adsz meg, majd egy `ctx.getBean(...)` deklarációt illeszt be. Csak futtatáskor kéri le a beant. |
 | Apply configured imports | Az Imports fülön engedélyezett teljes osztályneveket importálja az aktuális sessionbe. |
 
@@ -139,7 +145,7 @@ Előbb futtasd az első, majd a második cellát. A második eredménye `12`. Ha
 
 # 05. Eredmény, JSON és kódellenőrzés {#results}
 
-**Hely:** Java REPL, jobb oldali eredménypanel és a szerkesztő alatti ellenőrzési státusz.
+**Hely:** Workbook, jobb oldali eredménypanel és a szerkesztő alatti ellenőrzési státusz.
 
 | Elem | Mit mutat vagy hajt végre? |
 | --- | --- |
@@ -165,12 +171,12 @@ Ez fordítói szintaktikai/típusellenőrzés, nem teljes üzleti validáció va
 
 # 06. Variables: a session változói {#variables}
 
-**Hely:** a második fő fül. A lista a runtime által visszaigazolt IDE-sessionváltozókat mutatja. A fül megnyitásakor automatikusan frissül.
+**Hely:** Tools > Variables. A lista a runtime által visszaigazolt IDE-sessionváltozókat mutatja. A fül megnyitásakor automatikusan frissül.
 
 | Gomb | Használat és hatás |
 | --- | --- |
 | Refresh | Újra lekéri a változólistát. Lezárt kapcsolat esetén üríti a nézetet. |
-| Insert | A kijelölt változó nevét beilleszti a Java REPL kurzorához, és a munkafüzetre vált. Nem futtat. |
+| Insert | A kijelölt változó nevét beilleszti a Workbook kurzorához, és a munkafüzetre vált. Nem futtat. |
 | Inspect | A kijelölt változó objektumát megnyitja az Inspectorban. |
 | Previous / Next | A jelenlegi főablak-bekötésben ezek is az Inspectort nyitják meg a kiválasztott változóval; a tényleges lapozáshoz az Inspector saját gombjait használd. |
 | Drop | Eldobja a kijelölt Java-változó deklarációját a sessionből, majd frissíti a listát. Nem törli az adatbázisbeli adatot vagy a mentett DATA snapshotot. |
@@ -183,7 +189,7 @@ Ez fordítói szintaktikai/típusellenőrzés, nem teljes üzleti validáció va
 
 ## Mire nem szolgál ez a lista?
 
-Nem az alkalmazás összes lokális változóját mutatja, és nem a Spring beanlista. Metóduson belüli értékhez a **Debugger > Capture to REPL** vagy egy alkalmazáskódbeli capture/tap pont kell. A beaneket **Java REPL > Insert bean** segítségével választhatod ki.
+Nem az alkalmazás összes lokális változóját mutatja, és nem a Spring beanlista. Metóduson belüli értékhez a **Debugger > Capture to REPL** vagy egy alkalmazáskódbeli capture/tap pont kell. A beaneket **Workbook > Insert bean** segítségével választhatod ki.
 
 Claude saját MCP-sessionjének változói nem jelennek meg itt. Az IDE és Claude közötti átadáshoz ments DATA snapshotot, majd a másik sessionben töltsd be.
 
@@ -239,7 +245,7 @@ A `com.example` neveket a saját alkalmazásod osztályaira cseréld. Snapshotho
 
 ## Példa: egy újra használható bemenet
 
-1. A Java REPL-ben hozz létre egy `input` változót, vagy vedd át debuggerből.
+1. A Workbook-ben hozz létre egy `input` változót, vagy vedd át debuggerből.
 2. **Saved > Freeze DATA**: név `cv-input-42`, változó `input`, típus a saját DTO-d teljes neve. Az üres opcionális típusmezőt OK-val fogadd el, ne Cancel-lel.
 3. Később jelöld ki a mentést, **Load**, változónév `restoredInput`.
 4. **Variables > Refresh > restoredInput > Inspect** segítségével nézd meg a visszatöltött értéket.
@@ -317,7 +323,7 @@ Az összehasonlítás mentett JSON-adaton dolgozik, nem tölti vissza a DTO-kat 
 
 # 11. Inspector: az objektumböngésző {#inspector}
 
-**Megnyitás:** Java REPL > Inspect result, Variables > Inspect, Tap / Trace > Inspect selected, debugger capture vagy CASE > Inspect actual. Az Inspector a kiválasztott élő objektumhoz kapcsolódik.
+**Megnyitás:** Workbook > Inspect result, Variables > Inspect, Tap / Trace > Inspect selected, debugger capture vagy CASE > Inspect actual. Az Inspector a kiválasztott élő objektumhoz kapcsolódik.
 
 | Gomb / mező | Működés |
 | --- | --- |
@@ -341,7 +347,7 @@ Az összehasonlítás mentett JSON-adaton dolgozik, nem tölti vissza a DTO-kat 
 2. A Fields lapon keresd meg az `items` mezőt, majd Open selected.
 3. Lapozz, válassz egy elemet, és ismét Open selected.
 4. Variable: `selectedItem`; Bind current.
-5. A Java REPL-ben az új változóval dolgozhatsz. Tartós mintához Freeze DATA.
+5. A Workbook-ben az új változóval dolgozhatsz. Tartós mintához Freeze DATA.
 
 Az automatikus előnézet közvetlen mezőket olvas; nem futtatja újra az eredeti üzleti kifejezést. Explicit navigációnál például egy saját kollekció hozzáférő kódja futhat. Reset vagy contextcsere után új értéket kell megnyitni; a régi handle érvénytelen.
 
@@ -400,7 +406,7 @@ A 0.15-ös assertion-, paraméterezési és JUnit-export mezőket a 32-34. fejez
 
 ## Egy rövid, önálló példa
 
-A Java REPL-ben készíts bemenetet és elvárt értéket, majd mindkettőt Freeze DATA-val mentsd:
+A Workbook-ben készíts bemenetet és elvárt értéket, majd mindkettőt Freeze DATA-val mentsd:
 
 ```java
 var numbers = new java.util.ArrayList<Integer>(
@@ -483,7 +489,7 @@ A capture ellenőrzi a cél JVM és a REPL-session azonosságát. Nem folytatja 
 
 # 16. HTTP: mentett kérés összeállítása {#http-fields}
 
-**Hely:** HTTP fül. Balra a mentett kérések listája, jobbra a részletek, alul a HTTP-konzol látható. A panel saját HTTP-klienssel, az IDE folyamatából küldi a kérést; ehhez önmagában nem kell JShell-kapcsolat.
+**Hely:** Tools > HTTP. Balra a mentett kérések listája, jobbra a részletek, alul a HTTP-konzol látható. A panel saját HTTP-klienssel, az IDE folyamatából küldi a kérést; ehhez önmagában nem kell JShell-kapcsolat.
 
 | Mező | Mire való? |
 | --- | --- |
@@ -525,13 +531,13 @@ Az ikonok felirata tooltipként is megjelenhet. A lista **dupla kattintása futt
 | Header törlése | A kijelölt fejlécsort törli; kijelölés nélkül az utolsót. |
 | Mentés | Elmenti az űrlap aktuális tartalmát. |
 | Play | Mentés után elindítja az aktuális kérést. |
-| httpReq.perform snippet | Az elmentett kérések helperét és a kiválasztott kérés hívását a Java REPL-be illeszti. Csak az ottani Run küld kérést. |
+| httpReq.perform snippet | Az elmentett kérések helperét és a kiválasztott kérés hívását a Workbook-be illeszti. Csak az ottani Run küld kérést. |
 
 Kérésváltáskor és több más panelműveletnél is menti az aktuális mezőket. Tudatos ellenőrzési pontként használd a Mentés gombot. A snippet a kéréskészletből készül; nézd át a beillesztett kódot futtatás előtt.
 
 ## A konzol értelmezése
 
-A konzol megmutatja a metódust, a kérés útvonalát, a státuszkódot, időtartamot, Content-Type-ot és a válasz rövidített szövegét. A 2xx státusz HTTP-sikert jelent; a body üzleti jelentését külön ellenőrizd. A HTTP-konzol nem ugyanaz, mint a Java REPL Value / JSON-fa.
+A konzol megmutatja a metódust, a kérés útvonalát, a státuszkódot, időtartamot, Content-Type-ot és a válasz rövidített szövegét. A 2xx státusz HTTP-sikert jelent; a body üzleti jelentését külön ellenőrizd. A HTTP-konzol nem ugyanaz, mint a Workbook Value / JSON-fa.
 
 Kapcsolódási időkorlát: **10 másodperc**. Kérésidőkorlát: **30 másodperc**. A törzs és a fogadott válasz korlátja **1 MiB**; a konzol ennél rövidebb, legfeljebb 65 536 karakteres body-előnézetet mutat. Ugyanazon kérésazonosító újrafuttatása a korábbi kliensoldali hívás megszakítását kéri, de a szerveroldali hatást nem vonja vissza.
 
@@ -539,7 +545,7 @@ Kapcsolódási időkorlát: **10 másodperc**. Kérésidőkorlát: **30 másodpe
 
 # 18. AI: promptból Java-javaslat {#ai}
 
-**Hely:** AI fül. A plugin saját API-kliensét használja. Ez a panel nem a külső Claude MCP-kapcsolata; az a külön MCP fülön állítható be.
+**Hely:** Tools > AI. A plugin saját API-kliensét használja. Ez a panel nem a külső Claude MCP-kapcsolata; az a külön MCP fülön állítható be.
 
 | Mező / gomb | Működés |
 | --- | --- |
@@ -577,7 +583,7 @@ A táblázat oszlopai: **On**, **Alias**, **Fully Qualified Name**. Az **+ / Add
 
 Az Add Import / Edit Import ablakban Alias, Fully qualified name és Enabled mező látszik. Az Alias szervezési elnevezés; nem Java `as` alias. A runtime importálás a teljes osztálynevet használja, például `java.util.List`, majd a kódban a `List` névvel hivatkozhatsz rá.
 
-**Alkalmazás:** Java REPL > Apply configured imports. Az Imports táblázat átírása önmagában nem távolítja el a már futó session importjait. Új bejegyzés létrehozásakor a jelenlegi kód bekapcsolt állapottal ment; szükség esetén utána az On oszlopban kapcsold ki.
+**Alkalmazás:** Workbook > Apply configured imports. Az Imports táblázat átírása önmagában nem távolítja el a már futó session importjait. Új bejegyzés létrehozásakor a jelenlegi kód bekapcsolt állapottal ment; szükség esetén utána az On oszlopban kapcsold ki.
 
 ## Settings / Preferences > Spring Boot Debug REPL and MCP
 
@@ -597,13 +603,14 @@ A módosításokat az IDEA **Apply / OK** gombjával mentsd. Az agentre vonatkoz
 
 # 20. MCP: a helyi kiszolgáló gombjai {#mcp}
 
-**Hely:** az utolsó fő fül. Előbb legyen kapcsolat a futó alkalmazáshoz. A munkafüzet MCP gombja csak erre a fülre navigál.
+**Hely:** MCP, a második fő fül. Előbb legyen kapcsolat a futó alkalmazáshoz. A munkafüzet MCP gombja csak erre a fülre navigál.
 
 | Elem | Funkció |
 | --- | --- |
 | Start MCP | Helyi HTTP-kiszolgálót indít az aktuális REPL-célhoz. Rögzíti a portot és a kiválasztott jogosultságokat. |
 | Stop MCP | Leállítja az elérést és lezárja a klienssessionöket. Az alkalmazás fut tovább. |
-| Port (0 = free) | 0: szabad port; más érték: kért helyi port. Futás közben nem szerkeszthető. |
+| Advanced settings… | Megnyitja vagy elrejti a portot, futtatási szabályokat, korlátokat, eszközlistát és kitakarást. Az elrejtés megőrzi a beállításokat. |
+| Port (0 = free), az Advanced settings alatt | 0: szabad port; más érték: kért helyi port. Futás közben nem szerkeszthető. |
 | Copy client config | Az URL-t és a privát Authorization tokent tartalmazó JSON-t a vágólapra másolja. Futó szerver kell hozzá. |
 | Allow Java execution / state changes | Alapból ki. Fő engedély a végrehajtó és állapotmódosító eszközökhöz. Az olvasási/elemzési eszközök külön is használhatók, a saját kapcsolóiktól és az eszközlistától függően. |
 | Allow HotSwap | Alapból ki. Külön engedély a kódfrissítésre; az előző kapcsoló is kell hozzá. |
@@ -619,6 +626,8 @@ A módosításokat az IDEA **Apply / OK** gombjával mentsd. Az agentre vonatkoz
 | Redact likely secrets in MCP results | Alapból be; ismert titokminták kitakarása, nem teljes személyesadat-felismerés. |
 | MCP URL | Csak olvasható helyi cím, `/mcp` végződéssel. Ezt add a kliensnek. |
 | Clients / Last tool | Aktív klienssessionök száma és a legutóbb hívott eszköz. |
+
+Az MCP fő képernyőjén a kapcsolódás és a jogosultságkategóriák látszanak. Az **Advanced settings…** nyitja ki a táblázat többi beállítását. A teljes, 82 eszközös katalógus és az összes jogosultságellenőrzés megmaradt.
 
 ## Jogosultságváltás és újraindítás
 
@@ -750,7 +759,7 @@ Az alábbiak a pluginban regisztrált alapértékek. A keymap és az operációs
 
 | Művelet | Billentyű és hatókör |
 | --- | --- |
-| Run cell / selection | Cmd+Enter vagy Ctrl+Enter; Java REPL munkafüzet. |
+| Run cell / selection | Cmd+Enter vagy Ctrl+Enter; Workbook munkafüzet. |
 | Run + next | Shift+Enter; munkafüzet. |
 | Complete | Ctrl+Space; munkafüzet. |
 | Run Selection | Ctrl+Shift+R; normál forrásszerkesztőből kijelölt kód. |
@@ -764,7 +773,7 @@ Meta macOS-en Cmd. Evaluate at Caret és Reload Class esetén a plugin nem regis
 | Menüpont | Mit indít? |
 | --- | --- |
 | Run Selection / Evaluate at Caret | Kiértékelés a REPL-sessionben; nem a metódus lokális környezetében. |
-| Advanced Editor | Előhozza a Spring Boot Debug REPL and MCP ablakot; a munkafüzethez válaszd a Java REPL fület. |
+| Advanced Editor | Előhozza a Spring Boot Debug REPL and MCP ablakot; a munkafüzethez válaszd a Workbook fület. |
 | Sync Imports | A Java-forrás importjainak átvitele a sessionbe. |
 | Trace Method | Az aktuális metódus követése. |
 | Record Class Calls… | Osztályhívások rögzítése: gráf, forrás melletti bemenet és eredmény. Részletek a 39. fejezetben. |
@@ -875,7 +884,7 @@ Az alábbi 17 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 82
 
 | Jelenség | Mit ellenőrizz? |
 | --- | --- |
-| Not connected / nincs READY | Az alkalmazás indítási logját, a REPL-checkboxot és a Java REPL státuszát. Spring-hibát a Bind nem javít meg. |
+| Not connected / nincs READY | Az alkalmazás indítási logját, a REPL-checkboxot és a Workbook státuszát. Spring-hibát a Bind nem javít meg. |
 | Nincs aktív profil | Active profiles mező vagy `--spring.profiles.active=...`; ne puszta vesszős argumentum legyen. |
 | Nem látszik a checkbox / régi classloader-hiba | A friss ZIP-et telepítsd, majd indítsd újra az IDEA-t. Ellenőrizd a támogatott IDE-verziót és a régi egyéni agent beállítást. |
 | A lokális változó ismeretlen | Evaluate at Caret REPL-scope-ban fut. Lokális változóhoz debugger frame vagy capture kell. |
@@ -928,7 +937,7 @@ A Help (PDF) a pluginba csomagolt példányt nyitja meg. Az új kézikönyv a fr
 
 # 28. Futtatási mód és tranzakció {#execution-policy}
 
-A Java REPL eszköztára alatt az alkalmazás neve, profiljai, kapcsolata és a szerver által visszaigazolt futtatási mód látszik. A beállítás az IDE-session Java- és CASE-futtatására vonatkozik. A natív session alapból LIVE; az MCP külön szabályt használ, alapból tiltott Java-futtatással és ROLLBACK móddal.
+A Workbook eszköztára alatt az alkalmazás neve, profiljai, kapcsolata és a szerver által visszaigazolt futtatási mód látszik. A beállítás az IDE-session Java- és CASE-futtatására vonatkozik. A natív session alapból LIVE; az MCP külön szabályt használ, alapból tiltott Java-futtatással és ROLLBACK móddal.
 
 | Elem | Használat |
 | --- | --- |
@@ -952,7 +961,7 @@ A tranzakciós szemantikát a Spring programozott tranzakciókezelése adja: doc
 
 # 29. Reprodukció egy csomagban {#reproduction}
 
-**Hely:** Java REPL > Tools menü: **Create reproduction**, **Export reproduction**, **Import reproduction**. A művelet egy már kiválasztott DATA bemenetből és az utolsó Java-futtatás kódjából/eredményéből készül; nem rekonstruálja visszamenőleg egy tetszőleges alkalmazáshívás állapotát.
+**Hely:** Workbook > Tools menü: **Create reproduction**, **Export reproduction**, **Import reproduction**. A művelet egy már kiválasztott DATA bemenetből és az utolsó Java-futtatás kódjából/eredményéből készül; nem rekonstruálja visszamenőleg egy tetszőleges alkalmazáshívás állapotát.
 
 1. Mentsd a hibás bemenetet Capture vagy Saved segítségével DATA-ként.
 2. Töltsd vissza például `input` néven. Futtasd az ezt használó reprodukáló cellát. A cella legyen önálló a kiválasztott bemenettel és importokkal; más korábbi sessionváltozókat nem ment a csomag.
@@ -1100,7 +1109,7 @@ A JUnit paraméterezés és timeout működését a [JUnit 5 dokumentációja](h
 
 # 35. Notebook: cellaállapot és függőségek {#notebook-state}
 
-**Hely:** Java REPL munkafüzet és Cells eredményfül; a sorozatfuttatások a Run menüben vannak. A korábbi `.jsh` fájlok és `// %%` cellahatárok tovább használhatók.
+**Hely:** Workbook munkafüzet és Cells eredményfül; a sorozatfuttatások a Run menüben vannak. A korábbi `.jsh` fájlok és `// %%` cellahatárok tovább használhatók.
 
 **Eredmény közvetlenül a cellánál:** minden cella alatt megjelenik a futási sorszám, állapot, időtartam és rövid kimenet. Az elavulás jelzése megnevezi a módosult bemeneti cellát is, amikor az ismert. A bal margón levő futtatásjelre kattintva ugyanitt érhetők el a műveletek.
 
@@ -1142,7 +1151,7 @@ A sorozat az első hibánál, szerkesztésnél, kapcsolatváltozásnál vagy Int
 
 # 36. Teljes workspace mentése és megnyitása {#workspace-save}
 
-**Hely:** Java REPL > Workspace menü; a Save workspace külön ikont is kapott. A `.sbrepl-workspace` egy ellenőrzőösszegekkel ellátott ZIP, nem futtatható csomag. Az **Open workbook** továbbra is csak `.jsh`/szöveg megnyitása.
+**Hely:** Workbook > Workspace menü; a Save workspace külön ikont is kapott. A `.sbrepl-workspace` egy ellenőrzőösszegekkel ellátott ZIP, nem futtatható csomag. Az **Open workbook** továbbra is csak `.jsh`/szöveg megnyitása.
 
 | Gomb | Mit tartalmaz vagy végez? |
 | --- | --- |
@@ -1191,7 +1200,9 @@ Claude új eszközei: **repl_snapshot_versions**, **repl_snapshot_provenance**, 
 3. Jelöld ki az `order` kifejezést, majd jobb kattintás > Spring Boot Debug REPL and MCP > **Snapshot point…**. A bal margó helyi menüjéből is indítható; ilyenkor ellenőrizd a kifejezést.
 4. Add meg a snapshot nevét, például `order-input`. A **Java expression** a kiválasztott sor lokális környezetében értékelődik ki. A Java-típus opcionális; generikus listánál megadható a teljes típus. A **Capture attempts** alapból 1, maximum 100.
 5. Mentés után lila snapshotjel látszik a margón. Válts az alkalmazásra, és indítsd el a vizsgált kérést.
-6. A debugger a sor végrehajtása előtt rögzíti az értéket, majd folytatja az alkalmazást. A Debug konzolba siker vagy hiba kerül. A mentést a **Snapshots > Saved** fülön találod; innen töltsd be a REPL-be.
+6. A debugger a sor végrehajtása előtt rögzíti az értéket, majd folytatja az alkalmazást. A Debug konzolba siker vagy hiba kerül. Nyisd meg a **Tools > Snapshots > Saved** panelt; ha már nyitva volt, kattints a **Refresh** gombra. Innen töltsd be a mentést a REPL-be.
+
+A lila pont egy beállított mentési helyet jelöl. A lerakása vagy kijelölése önmagában nem ment: az alkalmazás következő hívásának el kell érnie a sort. Frissítés után indítsd újra az IDEA-t és a Debug alkalmazást. A 0.25.0 beköti ezt a saját pontot a Java-debuggerhez; kijavítja a korábbi, látható, de nem mentő jelölést.
 
 ## A pont kezelése
 
@@ -1201,7 +1212,7 @@ A pont az IDE projektjének breakpointbeállításában mentődik, és a forrás
 
 ## Mikor nem készül mentés?
 
-Normál Run módban nincs debuggeres sorérzékelés. Inicializálás előtti változó vagy hibás kifejezés nem értékelhető ki. A mentési kísérlet szerializációs hiba esetén is elfogy; javítás után élesítsd újra. A korábbi DATA ilyen hiba miatt nem cserélődik le. A Debug konzol adja a részletes hibát.
+Normál Run módban nincs debuggeres sorérzékelés. A letiltott pont vagy a Mute Breakpoints is megakadályozza a mentést. A Debug konzolban keresd az új `[REPL snapshot] Saved DATA` visszajelzést. Inicializálás előtti változó vagy hibás kifejezés nem értékelhető ki. A mentési kísérlet szerializációs hiba esetén is elfogy; javítás után élesítsd újra. A korábbi DATA ilyen hiba miatt nem cserélődik le. A Debug konzol adja a részletes hibát.
 
 A pillanatfelvétel a találat szálán készül. A debugger rövid időre felfüggeszti a szálat a kiértékelés és szerializáció idejére, de siker esetén nem vár kézi Resume-ra. Nagy objektum lassíthatja a kérést; továbbra is a 200 MiB alapkorlát érvényes. Egyszerű változót vagy mezőt válassz, mert egy metódushívásnak vagy egyedi szerializálónak saját mellékhatása lehet. Más szál által módosított objektumról ez nem garantál atomi képet.
 
@@ -1568,7 +1579,7 @@ Példa: rögzíts egy rendelést, készíts 0, 1 és 100 mennyiséget tartalmaz�
 
 # 45. Bean Explorer {#bean-explorer}
 
-**Helye:** az MCP utáni **Beans** fő fül. A **Java REPL > Tools > Bean explorer** is megnyitja. Az Insert bean továbbra is külön, gyors deklarációs segítség.
+**Helye:** Tools > Beans. A **Workbook > Tools > Bean explorer** is megnyitja. Az Insert bean továbbra is külön, gyors deklarációs segítség.
 
 | Vezérlő | Mire való? |
 | --- | --- |
@@ -1585,7 +1596,7 @@ Nézd át a generált kódot, használd a Check code funkciót, majd külön fut
 
 # 46. Watch és mezőváltozások {#watches}
 
-**Helye:** Java REPL eredményterület > **Watches**. A **Watch result** gomb `last1` alapértékkel nyitja a rögzítést; Pin watch alatt más sessionváltozó is megadható.
+**Helye:** Workbook eredményterület > **Watches**. A **Watch result** gomb `last1` alapértékkel nyitja a rögzítést; Pin watch alatt más sessionváltozó is megadható.
 
 | Vezérlő / nézet | Jelentés |
 | --- | --- |
@@ -1668,3 +1679,55 @@ MCP 2025-11-25 esetén az eval, CASE run/batch, reload és watch refresh opcion�
 Sessionönként legfeljebb 20 task marad meg. A TTL korlátozott, tényleges értékét a szerver közli. Az eredmény memóriában él, session/szerver megszűnésével elvész. Transporthiba után a task hibariportja megmarad, de a session további futtatást nem enged. Bizonytalan műveletet ne küldj újra automatikusan. Taskot nem támogató klienssel a szokásos szinkron toolhívás használható; a tényleges támogatás az MCP-hosttól függ.
 
 Az [MCP tasks specifikáció](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks) ezt kísérleti protokollfunkcióként írja le. Az [MCP resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) és a [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) szabályozza a feliratkozást és az átvitelt.
+
+# 50. Adatkezelés és a PDF betűkészleteinek licence {#data-handling}
+
+A plugin nem küld telemetriát, forráskódot vagy runtime-értéket a kiadónak. A helyi workspace és snapshot alkalmazásadatot tartalmazhat. Az opcionális AI-panel csak a **Send reviewed prompt** után küldi el a pontosan átnézett promptot a beállított szolgáltatónak. A hitelesített helyi MCP-kliens az engedélyezett runtime-adatokat olvashatja, és a saját szolgáltatójának továbbíthatja.
+
+A munkafüzet helyreállítási példánya az IDE rendszerkönyvtárának `java-repl-workspaces` mappájában található. A tartós snapshot az alkalmazás `~/.java-repl-snapshots`, a kitakart auditnapló a `~/.java-repl-audit` mappájába kerül, ha nincs felülírva. A workspace és a tartós snapshot nem jár le automatikusan. A plugin eltávolítása nem törli automatikusan ezeket a fájlokat vagy a PasswordSafe-bejegyzéseket.
+
+A snapshot és verziói a **Tools > Snapshots > Saved > Delete** művelettel törölhetők. A **Workbook > Workspace > Clear history** a snippetelőzményt üríti. A projekt és alkalmazás bezárása után a korábbi exportokat, helyreállítási és auditmappákat kézzel töröld, ha ezekre a példányokra sincs szükség. A PasswordSafe-titkok törlése érvényteleníti az érintett klienskonfigurációt. [A teljes adatkezelési leírás](https://github.com/damesek/intellij-idea-spring-boot-repl-plugin/blob/jetbrains-idea-plugin/PRIVACY.md) részletezi a tárolást, megosztást, törlést és az elérhetőséget.
+
+## Beágyazott betűkészletek
+
+A két PDF DejaVu Sans, Sans Bold és Sans Mono betűkészletrészleteket használ. Az eredeti teljes jogi közlemények és engedélyek alább olvashatók. A többi csomagolt könyvtár licence az eredeti JAR-ban marad; összefoglalójuk a THIRD-PARTY-NOTICES.txt fájlban található.
+
+The following software may be included in this product: Deja Vu fonts. Use of any of this software is governed by the terms of the license below:
+
+Fonts are (c) Bitstream (see below). DejaVu changes are in public domain. Glyphs imported from Arev fonts are (c) Tavmjong Bah (see below)
+
+### Bitstream Vera Fonts Copyright
+
+Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the fonts accompanying this license ("Fonts") and associated documentation files (the "Font Software"), to reproduce and distribute the Font Software, including without limitation the rights to use, copy, merge, publish, distribute, and/or sell copies of the Font Software, and to permit persons to whom the Font Software is furnished to do so, subject to the following conditions:
+
+The above copyright and trademark notices and this permission notice shall be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular the designs of glyphs or characters in the Fonts may be modified and additional glyphs or characters may be added to the Fonts, only if the fonts are renamed to names not containing either the words "Bitstream" or the word "Vera".
+
+This License becomes null and void to the extent applicable to Fonts or Font Software that has been modified and is distributed under the "Bitstream Vera" names.
+
+The Font Software may be sold as part of a larger software package but no copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL BITSTREAM OR THE GNOME FOUNDATION BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+
+Except as contained in this notice, the names of Gnome, the Gnome Foundation, and Bitstream Inc., shall not be used in advertising or otherwise to promote the sale, use or other dealings in this Font Software without prior written authorization from the Gnome Foundation or Bitstream Inc., respectively. For further information, contact: fonts at gnome dot org.
+
+### Arev Fonts Copyright
+
+Copyright (c) 2006 by Tavmjong Bah. All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the fonts accompanying this license ("Fonts") and associated documentation files (the "Font Software"), to reproduce and distribute the modifications to the Bitstream Vera Font Software, including without limitation the rights to use, copy, merge, publish, distribute, and/or sell copies of the Font Software, and to permit persons to whom the Font Software is furnished to do so, subject to the following conditions:
+
+The above copyright and trademark notices and this permission notice shall be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular the designs of glyphs or characters in the Fonts may be modified and additional glyphs or characters may be added to the Fonts, only if the fonts are renamed to names not containing either the words "Tavmjong Bah" or the word "Arev".
+
+This License becomes null and void to the extent applicable to Fonts or Font Software that has been modified and is distributed under the "Tavmjong Bah Arev" names.
+
+The Font Software may be sold as part of a larger software package but no copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL TAVMJONG BAH BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+
+Except as contained in this notice, the name of Tavmjong Bah shall not be used in advertising or otherwise to promote the sale, use or other dealings in this Font Software without prior written authorization from Tavmjong Bah. For further information, contact: tavmjong @ free . fr.

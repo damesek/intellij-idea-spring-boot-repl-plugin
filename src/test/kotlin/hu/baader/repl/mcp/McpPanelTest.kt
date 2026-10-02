@@ -55,8 +55,10 @@ class McpPanelTest {
                 assertFalse(button("Start MCP").isEnabled)
                 button("Copy client config").doClick(); assertEquals("test-config", copied)
                 button("Stop MCP").doClick(); assertTrue(stopped)
+                button("Advanced settings…").doClick()
                 for (width in listOf(700, 1000)) {
                     panel.setSize(width, 720); repeat(5) { layout(panel) }
+                    assertFalse("MCP settings must fit the available width", descendants(panel).filterIsInstance<JScrollPane>().single().horizontalScrollBar.isVisible)
                     val image = BufferedImage(width, 720, BufferedImage.TYPE_INT_RGB)
                     image.createGraphics().let { try { panel.printAll(it) } finally { it.dispose() } }
                     for (button in descendants(panel).filterIsInstance<AbstractButton>().filter { it.text?.isNotBlank() == true }) {
@@ -68,6 +70,30 @@ class McpPanelTest {
                         ImageIO.write(image, "png", path.resolve("McpPanel-$width.png").toFile())
                     }
                 }
+            } finally { panel.dispose() }
+        }
+    }
+
+    @Test fun collapsingAdvancedSettingsKeepsTheirValuesAndRunningServerLocksThem() {
+        SwingUtilities.invokeAndWait {
+            var selected: McpPermissions? = null
+            val panel = McpPanel({ _, permission -> selected = permission }, {}, { null })
+            fun descendants(root: Container): List<java.awt.Component> = root.components.flatMap { listOf(it) + if (it is Container) descendants(it) else emptyList() }
+            fun button(label: String) = descendants(panel).filterIsInstance<JButton>().single { it.text == label }
+            try {
+                button("Advanced settings…").doClick()
+                val timeout = descendants(panel).filterIsInstance<JSpinner>()[1]
+                timeout.value = 15000
+                button("Hide advanced settings").doClick()
+                button("Start MCP").doClick()
+                assertEquals(McpPermissions(timeoutMillis = 15000), selected)
+                panel.showState(McpState(url = "http://127.0.0.1:1234/mcp"))
+                button("Advanced settings…").doClick()
+                assertFalse(timeout.isEnabled)
+                assertEquals(15000, timeout.value)
+                assertFalse(button("Choose allowed tools").isEnabled)
+                panel.showState(McpState())
+                assertTrue(timeout.isEnabled)
             } finally { panel.dispose() }
         }
     }

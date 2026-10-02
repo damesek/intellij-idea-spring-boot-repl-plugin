@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--language", choices=["hu", "en", "all"], default="all", help="Build both languages by default")
 parser.add_argument("--output", type=Path, help="Custom output PDF; requires --language hu or en")
-parser.add_argument("--font-dir", type=Path, help="Directory with DejaVuSans, DejaVuSans-Bold and DejaVuSansMono TTF files, or Arial/Courier New TTF files")
+parser.add_argument("--font-dir", type=Path, help="Directory with DejaVuSans, DejaVuSans-Bold and DejaVuSansMono TTF files")
 args = parser.parse_args()
 if args.language == "all":
     if args.output:
@@ -47,9 +47,9 @@ mcp_tool_count = sum(len(re.findall(r'McpTool\("repl_', path.read_text())) for p
                      (ROOT / "src/main/kotlin/hu/baader/repl/mcp").glob("*Tools.kt"))
 source = SOURCE.read_text().replace("{{version}}", version)
 assert not any(c in source for c in "\u2010\u2011\u2012\u2013\u2014"), "Use ASCII hyphens in the PDF source"
-font_dirs = [args.font_dir] if args.font_dir else [Path("/usr/share/fonts/truetype/dejavu"), Path("/System/Library/Fonts/Supplemental")]
+font_dirs = [args.font_dir] if args.font_dir else [Path("/usr/share/fonts/truetype/dejavu")]
 for directory in font_dirs:
-    for files in [("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"), ("Arial.ttf", "Arial Bold.ttf", "Courier New.ttf")]:
+    for files in [("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf")]:
         if all((directory / name).is_file() for name in files):
             font_paths = [directory / name for name in files]
             break
@@ -57,7 +57,7 @@ for directory in font_dirs:
         continue
     break
 else:
-    raise SystemExit("Pass --font-dir with DejaVu Sans/Mono or Arial/Courier New fonts (including Hungarian accents)")
+    raise SystemExit("Pass --font-dir with DejaVu Sans/Mono fonts (including Hungarian accents)")
 for name, path in zip(["Guide", "GuideBold", "GuideMono"], font_paths):
     pdfmetrics.registerFont(TTFont(name, str(path)))
     assert all(ord(c) in pdfmetrics.getFont(name).face.charToGlyph for c in "ÁÉÍÓÖŐÚÜŰáéíóöőúüű"), name
@@ -71,14 +71,14 @@ PALE = colors.HexColor("#F1F6F8")
 RULE = colors.HexColor("#D8E4EA")
 WIDTH = A4[0] - 96
 styles = {
-    "body": ParagraphStyle("Body", fontName="Guide", fontSize=10.2, leading=14.2, textColor=INK, spaceAfter=7, allowWidows=0, allowOrphans=0),
+    "body": ParagraphStyle("Body", fontName="Guide", fontSize=10, leading=13.5, textColor=INK, spaceAfter=7, allowWidows=0, allowOrphans=0),
     "title": ParagraphStyle("Title", fontName="GuideBold", fontSize=22, leading=27, textColor=INK, spaceAfter=15, keepWithNext=True),
     "cover": ParagraphStyle("Cover", fontName="GuideBold", fontSize=40, leading=46, textColor=INK, spaceBefore=24, spaceAfter=24, keepWithNext=True),
     "heading": ParagraphStyle("Heading", fontName="GuideBold", fontSize=12.8, leading=16, textColor=ACCENT, spaceBefore=10, spaceAfter=6, keepWithNext=True),
-    "cell": ParagraphStyle("Cell", fontName="Guide", fontSize=9.3, leading=12.5, textColor=INK),
-    "headcell": ParagraphStyle("HeadCell", fontName="GuideBold", fontSize=9.3, leading=12.5, textColor=colors.white),
+    "cell": ParagraphStyle("Cell", fontName="Guide", fontSize=9, leading=12, textColor=INK),
+    "headcell": ParagraphStyle("HeadCell", fontName="GuideBold", fontSize=9, leading=12, textColor=colors.white),
     "code": ParagraphStyle("Code", fontName="GuideMono", fontSize=9.1, leading=12.3, textColor=INK),
-    "list": ParagraphStyle("List", fontName="Guide", fontSize=10.2, leading=14.2, textColor=INK, leftIndent=15, firstLineIndent=-15, spaceAfter=5),
+    "list": ParagraphStyle("List", fontName="Guide", fontSize=10, leading=13.5, textColor=INK, leftIndent=15, firstLineIndent=-15, spaceAfter=5),
 }
 
 def inline(value):
@@ -119,9 +119,8 @@ class UiMap(Flowable):
         canvas.setFillColor(PALE)
         canvas.setStrokeColor(RULE)
         canvas.roundRect(0, 0, self.width, self.height, 6, fill=1, stroke=1)
-        labels = ["Java REPL", "Variables", "Snapshots", "Inspector", "Tap / Trace", "Cases / Reload",
-                  "Debugger", "HTTP", "AI", "Imports", "MCP", "Beans"]
-        tab_width = (self.width - 16) / 6
+        labels = ["Workbook", "MCP", "Tools"]
+        tab_width = (self.width - 16) / 3
         for index, label in enumerate(labels):
             x, y = 8 + index % 6 * tab_width, self.height - 24 - (index // 6) * 22
             canvas.setFillColor(ACCENT if index == 0 else colors.white)
@@ -129,6 +128,11 @@ class UiMap(Flowable):
             canvas.setFillColor(colors.white if index == 0 else INK)
             canvas.setFont("GuideBold" if index == 0 else "Guide", 7.5)
             canvas.drawCentredString(x + (tab_width - 3) / 2, y + 6, label)
+
+        canvas.setFillColor(MUTED)
+        canvas.setFont("Guide", 7.5)
+        canvas.drawString(8, 171, "Tools: Variables / Snapshots / Inspector / Tap / Trace / Cases / Reload")
+        canvas.drawString(8, 162, "Debugger / HTTP / AI / Imports / Beans")
 
         def box(x, y, width, height, title, detail=""):
             canvas.setFillColor(colors.white)
@@ -142,7 +146,7 @@ class UiMap(Flowable):
                 canvas.setFillColor(MUTED)
                 canvas.drawString(x + 8, y + height - 27, detail)
 
-        box(8, 136, self.width - 16, 22, localized("1. Connect, Run, Interrupt, Save; műveletmenük", "1. Connect, Run, Interrupt, Save; action menus"))
+        box(8, 136, self.width - 16, 22, localized("Workbook: Connect, Run, Interrupt, Save; műveletmenük", "Workbook: Connect, Run, Interrupt, Save; action menus"))
         box(8, 110, self.width - 16, 22, localized("2. Alkalmazás, profilok, visszaigazolt futtatási mód", "2. Application, profiles, confirmed execution mode"))
         box(8, 43, 302, 62, localized("3. Java-munkafüzet", "3. Java workbook"), localized("Cellák, helyi eredmények és kódellenőrzés", "Cells, individual results and code checking"))
         box(315, 43, self.width - 323, 62, localized("4. Eredmény", "4. Result"), "Value / Output / Cells / Watches")
@@ -159,7 +163,7 @@ class CoverSummary(Flowable):
         canvas = self.canv
         canvas.saveState()
         card = (self.width - 16) / 3
-        for index, (number, label) in enumerate([("12", localized("fő fül, gombmagyarázatokkal", "main tabs, buttons explained")),
+        for index, (number, label) in enumerate([("3", localized("fő fül, minden eszköz megmarad", "main tabs, all tools retained")),
                                                  (str(mcp_tool_count), localized("MCP-eszköz Claude számára", "MCP tools for Claude")),
                                                  ("200 MiB", localized("alap DATA snapshotkorlát", "default DATA snapshot limit"))]):
             x = index * (card + 8)
@@ -225,9 +229,9 @@ while i < len(lines):
         paragraph.section_key = key
         story.append(paragraph)
         section += 1
-    elif line.startswith("## "):
+    elif line.startswith("## ") or line.startswith("### "):
         heading_style = ParagraphStyle("McpHeading", parent=styles["heading"], keepWithNext=False) if key == "mcp-tools" else styles["heading"]
-        story.append(Paragraph(inline(line[3:]), heading_style))
+        story.append(Paragraph(inline(line.lstrip("# ")), heading_style))
     elif line == "{{contents}}":
         toc = TableOfContents()
         toc.levelStyles = [ParagraphStyle("ContentsEntry", fontName="Guide", fontSize=9.8, leading=13,
@@ -266,7 +270,7 @@ while i < len(lines):
         ratios = [0.34, 0.66] if len(rows[0]) == 2 else [0.25, 0.29, 0.46]
         table = Table([[Paragraph(inline(cell), styles["headcell" if index == 0 else "cell"]) for cell in row] for index, row in enumerate(rows)],
                       colWidths=[WIDTH * ratio for ratio in ratios], repeatRows=1, hAlign="LEFT")
-        padding = {"notebook-state": 5, "limits": 6}.get(key, 7)
+        padding = 5
         table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), ACCENT), ("ROWBACKGROUNDS", (0, 1), (-1, -1), [PALE, colors.white]),
                                   ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, 0), .7, ACCENT),
                                   ("LINEBELOW", (0, 1), (-1, -1), .35, RULE),
