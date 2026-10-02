@@ -619,7 +619,7 @@ Save with IDEA's **Apply / OK**. Agent settings do not replace the agent in an a
 
 ## Changing permissions and restarting
 
-**Stop MCP > configure switches > Start MCP > Copy client config > update the client.** Each Start creates a new token. With port 0 the URL may also change; even on a fixed port the token must be replaced.
+**Stop MCP > configure switches > Start MCP.** The last successful listening port is remembered for this project, including a port allocated with 0. The project token is retained in IDE PasswordSafe according to the IDE password storage settings. The copied client config remains usable after MCP or IDE restart. Choose 0 or another port to change the URL; copy the config again if the URL changes or the saved credential is cleared. Client sessions and LIVE references still close on stop; reconnect the application and start MCP explicitly.
 
 The server listens only on `127.0.0.1`. Up to four MCP sessions can be open; they expire after 30 idle minutes. Changing or losing the REPL connection, or closing the project, stops MCP access.
 
@@ -883,7 +883,7 @@ These 17 tools work with the shared IDE recording. The complete catalog contains
 | Snapshot loading fails | DTO and Jackson availability; saved generic type. Open CASEs in Cases / Reload. |
 | Reload rejected | Compilation error or unsupported JVM structural change. Restart the application for the latter. |
 | HTTP environment variable missing | Play sees the IDE environment; a snippet sees the application's. Check where the variable is set. |
-| MCP 401 / connection refused | Start MCP, fresh URL/token and exact Authorization header. Every Start regenerates the token. |
+| MCP 401 / connection refused | Start MCP for the connected application; check the saved port, PasswordSafe and exact Authorization header. Re-copy config after changing the URL or clearing the saved credential. |
 | Claude Code command error | Include `"type": "http"` in JSON configuration; URL alone is insufficient. |
 | MCP GET /mcp fails | SSE requires the bearer token, initialized session and Accept: text/event-stream. It is not a public web page; see chapter 49. |
 | MCP tool missing | Change permissions while MCP is stopped, then Start and update client configuration. |

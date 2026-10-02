@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "hu.baader"
-version = "0.24.0"
+version = "0.24.1"
 
 repositories {
     mavenCentral()
@@ -134,6 +134,11 @@ intellijPlatform {
             Workbook saving never executes code. HTTP and reviewed AI requests are optional.
         """.trimIndent()
         changeNotes = """
+            <p>0.24.1</p>
+            <ul>
+              <li>Remember the MCP listening port per project and retain its access token in IDE PasswordSafe.</li>
+              <li>Keep copied client configurations usable across server and IDE restarts; client sessions remain temporary.</li>
+            </ul>
             <p>0.24.0</p>
             <ul>
               <li>Renamed to Spring Boot Debug REPL and MCP while preserving settings and configuration IDs.</li>

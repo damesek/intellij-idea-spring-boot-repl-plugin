@@ -12,12 +12,13 @@ internal class McpPanel(
     private val startServer: (Int, McpPermissions) -> Unit,
     private val stopServer: () -> Unit,
     private val config: () -> String?,
-    private val copy: (String) -> Unit = { CopyPasteManager.getInstance().setContents(StringSelection(it)) }
+    private val copy: (String) -> Unit = { CopyPasteManager.getInstance().setContents(StringSelection(it)) },
+    initialPort: Int = 0
 ) : JPanel(BorderLayout(8, 8)), Disposable {
     private val start = JButton("Start MCP")
     private val stop = JButton("Stop MCP")
     private val copyConfig = JButton("Copy client config")
-    private val port = JSpinner(SpinnerNumberModel(0, 0, 65535, 1))
+    private val port = JSpinner(SpinnerNumberModel(initialPort, 0, 65535, 1))
     private val execution = JCheckBox("Allow Java execution / state changes", false)
     private val reload = JCheckBox("Allow HotSwap", false)
     private val snapshotWrites = JCheckBox("Allow snapshot / CASE writes", false)
@@ -74,7 +75,9 @@ internal class McpPanel(
             When several transaction managers exist, enter the exact manager bean name. Missing managers stop execution.
             Both ROLLBACK and READ_ONLY always roll back their participating synchronous database work.
             Read-only is a driver hint. Independent transactions and async work are not covered.
-            Change permissions while stopped, then start and copy the new config.
+            Change permissions while stopped, then start again. The port and token are remembered for this project.
+            Choose port 0 to allocate a new port; copy the config again if the URL changes.
+            The token is stored in IDE PasswordSafe according to your password storage settings.
 
             These are tool permissions, not a Java sandbox: arbitrary Java can access the whole target JVM.
             Do not grant Java execution to an untrusted client. It can bypass narrower tool restrictions.
@@ -117,7 +120,8 @@ internal class McpPanel(
         }
         showState(McpState())
     }
-    constructor(service: McpService) : this(service::start, { service.stop() }, service::clientConfig) {
+    constructor(service: McpService) : this(service::start, { service.stop() }, service::clientConfig,
+        initialPort = service.rememberedPort) {
         subscription = service.listen(::showState)
     }
     internal fun showState(state: McpState) {
@@ -129,6 +133,7 @@ internal class McpPanel(
         execution.isEnabled = port.isEnabled
         reload.isEnabled = port.isEnabled && execution.isSelected
         listOf(snapshotWrites, snapshotDelete, caseRuns, captureChanges, recordingAccess, executionMode, transactionManager, timeout, quota, resultLimit, redact, toolsButton).forEach { it.isEnabled = port.isEnabled }
+        if (running && state.port > 0) port.value = state.port
         endpoint.text = state.url; status.text = state.detail
         clients.text = "Clients: ${state.clients}" + if (state.lastTool.isEmpty()) "" else " · Last tool: ${state.lastTool}"
     }

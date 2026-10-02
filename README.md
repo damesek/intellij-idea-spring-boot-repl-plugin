@@ -34,7 +34,7 @@ Java evaluation runs inside the application and can change its state. Optional d
 
 HotSwap supports compatible method-body changes. Structural changes can require a restart. Snapshots preserve selected data, not an entire running JVM.
 
-**Version 0.24.0 · IntelliJ IDEA 2024.1–2025.2.x · Java 17 and 21 tested.** See the [engineering guide](docs/engineering.md) for the exact verification matrix and known limits.
+**Version 0.24.1 · IntelliJ IDEA 2024.1–2025.2.x · Java 17 and 21 tested.** See the [engineering guide](docs/engineering.md) for the exact verification matrix and known limits.
 
 ## Read more
 

@@ -6,7 +6,7 @@
 
     <groupId>hu.baader</groupId>
     <artifactId>sb-repl-agent</artifactId>
-  <version>0.24.0</version>
+  <version>0.24.1</version>
     <name>Spring Boot Debug REPL and MCP - Agent</name>
     <description>Attachable JVM agent that exposes an nREPL endpoint for the sb-repl IntelliJ plugin.</description>
     <url>https://github.com/damesek/sb-repl</url>

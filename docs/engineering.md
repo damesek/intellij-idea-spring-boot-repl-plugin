@@ -48,7 +48,7 @@ python3 scripts/check-repository.py
 ./gradlew verifyPlugin -PtestJdk=21
 ./gradlew verifyPlugin -PtestJdk=21 -PverifyPreviousIdes=true
 mvn -B -f sb-repl-agent/pom.xml package -Dgpg.skip=true
-python3 scripts/check-agent-package.py sb-repl-agent/target/sb-repl-agent-0.24.0.jar
+python3 scripts/check-agent-package.py sb-repl-agent/target/sb-repl-agent-0.24.1.jar
 mvn -B -f sb-repl-bridge/pom.xml package -Dgpg.skip=true
 ```
 

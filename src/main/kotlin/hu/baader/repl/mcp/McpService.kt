@@ -9,12 +9,14 @@ import hu.baader.repl.nrepl.NreplService
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
-internal data class McpState(val busy: Boolean = false, val url: String = "", val clients: Int = 0,
+internal data class McpState(val busy: Boolean = false, val url: String = "", val port: Int = 0, val clients: Int = 0,
     val lastTool: String = "", val detail: String = "Stopped. Connect an application, then start MCP.")
 
 @Service(Service.Level.PROJECT)
 internal class McpService(private val project: Project) : Disposable {
     private val repl = NreplService.getInstance(project)
+    private val endpoint = McpEndpointSettings.getInstance(project)
+    val rememberedPort: Int get() = endpoint.port
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "sb-repl-mcp-lifecycle").apply { isDaemon = true } }
     private val listeners = CopyOnWriteArrayList<(McpState) -> Unit>()
     private val lock = Any()
@@ -62,12 +64,13 @@ internal class McpService(private val project: Project) : Disposable {
                         check(repl.mcpTarget() == captured) { "REPL target changed" }
                         McpRecordingBackend(NreplMcpBackend.connect(captured.endpoint, captured.pid),
                             IdeMcpRecordingAccess(project), permissions)
-                    }, ::updated)
+                    }, token = endpoint.token(), changed = ::updated)
                     val accepted = synchronized(lock) {
                         if (disposed || generation != run || repl.mcpTarget() != captured) false
                         else {
+                            endpoint.rememberPort(created.port)
                             server = created
-                            state = McpState(url = created.url, detail = "Running · application PID ${captured.pid}")
+                            state = McpState(url = created.url, port = created.port, detail = "Running · application PID ${captured.pid}")
                             true
                         }
                     }
@@ -77,7 +80,7 @@ internal class McpService(private val project: Project) : Disposable {
                     }
                 } catch (_: Exception) {
                     synchronized(lock) {
-                        if (generation == run) { target = null; state = McpState(detail = "MCP could not start. Check the port (0 selects a free port) and the REPL connection.") }
+                        if (generation == run) { target = null; state = McpState(detail = "MCP could not start. Check the port (0 selects a free port), IDE PasswordSafe, and the REPL connection.") }
                     }
                 }
                 publish()

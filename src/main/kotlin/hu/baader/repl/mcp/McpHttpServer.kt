@@ -11,18 +11,19 @@ internal class McpHttpServer private constructor(
     private val server: HttpServer, private val executor: ExecutorService,
     private val timer: ScheduledExecutorService, val router: McpRouter, private val token: String
 ) : AutoCloseable {
-    val url = "http://127.0.0.1:${server.address.port}/mcp"
+    val port = server.address.port
+    val url = "http://127.0.0.1:$port/mcp"
     fun clientConfig(): String = McpJson.gson.newBuilder().setPrettyPrinting().create().toJson(McpJson.objectOf(
         "mcpServers" to mapOf("spring-boot-repl" to mapOf("url" to url, "headers" to mapOf("Authorization" to "Bearer $token")))))
     override fun close() { router.close(); server.stop(0); timer.shutdownNow(); executor.shutdownNow() }
     companion object {
-        fun start(port: Int, permissions: McpPermissions, backend: () -> McpBackend, changed: () -> Unit): McpHttpServer {
+        fun start(port: Int, permissions: McpPermissions, backend: () -> McpBackend,
+                  token: String = McpRouter.secret(), changed: () -> Unit): McpHttpServer {
             require(port in 0..65535) { "Port must be 0..65535 (0 selects a free port)" }
             val server = HttpServer.create(InetSocketAddress("127.0.0.1", port), 16)
             val executor = ThreadPoolExecutor(16, 16, 30, TimeUnit.SECONDS, ArrayBlockingQueue(32),
                 { r -> Thread(r, "sb-repl-mcp-http").apply { isDaemon = true } }, ThreadPoolExecutor.AbortPolicy())
             val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sb-repl-mcp-expiry").apply { isDaemon = true } }
-            val token = McpRouter.secret()
             val router = McpRouter(token, "127.0.0.1:${server.address.port}", permissions, backend, changed)
             try {
                 server.createContext("/mcp") { exchange -> serve(exchange, router) }

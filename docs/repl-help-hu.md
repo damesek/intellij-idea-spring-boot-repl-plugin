@@ -622,7 +622,7 @@ A módosításokat az IDEA **Apply / OK** gombjával mentsd. Az agentre vonatkoz
 
 ## Jogosultságváltás és újraindítás
 
-**Stop MCP > kapcsolók beállítása > Start MCP > Copy client config > kliensbeállítás frissítése.** Minden Start új tokent készít. 0 portnál a cím is változhat. Fix port mellett is cserélni kell a tokent.
+**Stop MCP > kapcsolók beállítása > Start MCP.** A projekt megőrzi az utolsó sikeres figyelő portot, a 0-val választott portot is. A projekt tokenjét az IDE PasswordSafe tárolja az IDE jelszótárolási beállításai szerint. A másolt klienskonfiguráció MCP- vagy IDE-újraindítás után is használható. Másik URL-hez válassz 0-t vagy másik portot; URL-változás vagy a mentett hitelesítő adat törlése után másold újra a konfigurációt. Leállításkor a klienssessionök és LIVE referenciák megszűnnek; csatlakoztasd újra az alkalmazást, majd indítsd el az MCP-t.
 
 A szerver csak `127.0.0.1` címen figyel. Legfeljebb 4 MCP-session lehet nyitva; 30 perc inaktivitás után lejárnak. REPL-kapcsolat cseréje/megszakadása és projektbezárás is leállítja az MCP-elérést.
 
@@ -886,7 +886,7 @@ Az alábbi 17 eszköz a közös IDE-felvételt kezeli; a katalógus összesen 82
 | Snapshot betöltése sikertelen | Legyen elérhető a DTO és Jackson; ellenőrizd a mentett generikus típust. CASE-t a Cases / Reload lapon nyiss meg. |
 | Reload elutasítva | Fordítási hiba vagy JVM által nem támogatott szerkezeti változás. Utóbbinál alkalmazás-újraindítás kell. |
 | HTTP-ből hiányzik környezeti változó | A Play az IDE környezetét látja, a snippet az alkalmazásét. Ellenőrizd, hol állítottad be. |
-| MCP 401 / kapcsolat elutasítva | Start MCP állapot, friss URL/token, pontos Authorization fejléc. Minden Start új tokent generál. |
+| MCP 401 / kapcsolat elutasítva | Csatlakoztatott alkalmazás és Start MCP; ellenőrizd a mentett portot, a PasswordSafe-et és a pontos Authorization fejlécet. URL-változás vagy a mentett hitelesítő adat törlése után másold újra a konfigurációt. |
 | Claude Code command hibát jelez | JSON-konfigurációban legyen `"type": "http"`. Az URL önmagában kevés. |
 | MCP GET /mcp hibát ad | Az SSE-hez bearer token, inicializált session és Accept: text/event-stream kell. Nem nyilvános weboldal; lásd a 49. fejezetet. |
 | MCP-eszköz hiányzik | A jogosultságokat leállított MCP mellett módosítsd, utána Start és új klienskonfiguráció. |

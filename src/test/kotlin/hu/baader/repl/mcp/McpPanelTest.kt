@@ -10,6 +10,30 @@ import javax.imageio.ImageIO
 import javax.swing.*
 
 class McpPanelTest {
+    @Test fun rememberedAndAllocatedPortsRemainVisibleAfterStop() {
+        SwingUtilities.invokeAndWait {
+            var requested = -1
+            val panel = McpPanel({ port, _ -> requested = port }, {}, { null }, initialPort = 54321)
+            fun descendants(root: Container): List<java.awt.Component> = root.components.flatMap {
+                listOf(it) + if (it is Container) descendants(it) else emptyList()
+            }
+            try {
+                val start = descendants(panel).filterIsInstance<JButton>().single { it.text == "Start MCP" }
+                val port = descendants(panel).filterIsInstance<JSpinner>().first()
+                start.doClick()
+                assertEquals(54321, requested)
+                port.value = 0
+                start.doClick()
+                assertEquals(0, requested)
+                panel.showState(McpState(url = "http://127.0.0.1:54322/mcp", port = 54322))
+                assertEquals(54322, port.value)
+                panel.showState(McpState())
+                start.doClick()
+                assertEquals(54322, requested)
+            } finally { panel.dispose() }
+        }
+    }
+
     @Test fun buttonsPassPermissionsCopyConfigAndStayReachable() {
         SwingUtilities.invokeAndWait {
             var selected: McpPermissions? = null

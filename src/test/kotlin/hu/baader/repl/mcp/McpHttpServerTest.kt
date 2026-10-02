@@ -60,6 +60,40 @@ class McpHttpServerTest {
             assertEquals("spring-boot-repl", McpJson.parse(valid.output.toString("UTF-8")).asJsonObject.getAsJsonObject("result").getAsJsonObject("serverInfo")["name"].asString)
         }
     }
+    @Test fun copiedClientConfigSurvivesRestartButClientSessionsDoNot() {
+        assumeFalse("Sandbox forbids OS sockets; run with normal Gradle/CI", java.lang.Boolean.getBoolean("sb.repl.tests.noSockets"))
+        val secrets = mutableMapOf<String, String>()
+        fun token() = McpEndpointCredentials("mcp:restart", { secrets[it].orEmpty() }, { k, v -> secrets[k] = v }).token()
+        val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
+        fun send(url: String, authorization: String, body: String, session: String? = null): HttpResponse<String> {
+            val request = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(5))
+                .header("Authorization", authorization).header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+            if (session != null) request.header("MCP-Session-Id", session)
+            return client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+        }
+        val first = McpHttpServer.start(0, McpPermissions(), ::backend, token = token()) {}
+        val port = first.port
+        val config = first.clientConfig()
+        val authorization = McpJson.parse(config).asJsonObject.getAsJsonObject("mcpServers")
+            .getAsJsonObject("spring-boot-repl").getAsJsonObject("headers")["Authorization"].asString
+        val oldSession = first.use {
+            val initialized = send(it.url, authorization, initialization())
+            assertEquals(200, initialized.statusCode())
+            initialized.headers().firstValue("MCP-Session-Id").orElseThrow()
+        }
+        McpHttpServer.start(port, McpPermissions(), ::backend, token = token()) {}.use { reopened ->
+            assertEquals(config, reopened.clientConfig())
+            val list = McpJson.objectOf("jsonrpc" to "2.0", "id" to 2, "method" to "tools/list").toString()
+            assertEquals(404, send(reopened.url, authorization, list, oldSession).statusCode())
+            assertEquals(401, send(reopened.url, "Bearer wrong", initialization()).statusCode())
+            val initialized = send(reopened.url, authorization, initialization())
+            assertEquals(200, initialized.statusCode())
+            assertNotEquals(oldSession, initialized.headers().firstValue("MCP-Session-Id").orElseThrow())
+        }
+    }
+
     @Test fun liveHttpStartInitializeToolsDeleteAndStop() {
         assumeFalse("Sandbox forbids OS sockets; run this test with normal Gradle/CI", java.lang.Boolean.getBoolean("sb.repl.tests.noSockets"))
         val server = McpHttpServer.start(0, McpPermissions(), ::backend) {}
